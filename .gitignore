@@ -1,0 +1,9 @@
+node_modules/
+web/dist/
+tests/capturas/
+.env
+.env.*
+!.env.example
+supabase/.temp/
+
+instalar.sql

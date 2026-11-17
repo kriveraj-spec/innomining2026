@@ -1,0 +1,11 @@
+# Configuración de Supabase CLI para este proyecto (supabase link / supabase functions deploy)
+project_id = "innomining2026"
+
+[functions.enviar-qr]
+verify_jwt = true          # solo usuarios con sesión; además se verifica rol admin dentro
+
+[functions.qr]
+verify_jwt = false         # imagen pública del QR (el correo la muestra); solo tokens activos
+
+[functions.brevo-webhook]
+verify_jwt = false         # Brevo no envía JWT; se protege con ?secreto=BREVO_WEBHOOK_SECRET

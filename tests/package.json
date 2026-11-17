@@ -1,0 +1,14 @@
+{
+  "name": "innomining2026-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:db": "node db.test.mjs",
+    "test:e2e": "node e2e.test.mjs"
+  },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "pg": "8.13.3",
+    "qrcode-generator": "1.4.4"
+  }
+}

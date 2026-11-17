@@ -1,0 +1,21 @@
+{
+  "name": "innomining2026-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.2.5",
+    "@supabase/supabase-js": "2.49.4",
+    "jsqr": "1.4.0",
+    "jszip": "3.10.1",
+    "qrcode-generator": "1.4.4",
+    "read-excel-file": "5.8.8"
+  },
+  "devDependencies": {
+    "vite": "6.3.5"
+  }
+}
