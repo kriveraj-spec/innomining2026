@@ -42,6 +42,7 @@ const brevo = await iniciarBrevoFalso();
 const env = { BREVO_API_BASE: brevo.base };
 const S = await iniciar({ database: 'im26_e2e', env, webDir: path.join(RAIZ, 'web/dist'), port: 8787 });
 const q = (sql, v) => S.pool.query(sql, v).then((r) => r.rows);
+await q('update configuracion set brevo_api_base = $1', [brevo.base]); // en producción: https://api.brevo.com/v3
 const CODIGO = 'CodigoDePrueba2026abcXYZ';
 await S.crearUsuario('comite@innomining2026.app', CODIGO, 'admin', 'Comité organizador');
 
@@ -157,8 +158,7 @@ await paso('Configuración: guardar clave y remitente de Brevo desde el panel', 
 
 await paso('6. Correos: verificar Brevo, vista previa institucional, prueba y envío a pendientes', async () => {
   await adm.click('.nav[href="#/correos"]');
-  await adm.click('#b-estado');
-  await adm.waitForSelector('text=Todo listo');
+  await adm.waitForSelector('#estado .notice.ok');
   await adm.click('#b-prev');
   await adm.frameLocator('iframe.mail-frame').locator('text=Te compartimos tu código QR personal').waitFor();
   await adm.screenshot({ path: path.join(SHOTS, '07-vista-previa-correo.png') });
@@ -170,7 +170,12 @@ await paso('6. Correos: verificar Brevo, vista previa institucional, prueba y en
   await adm.waitForSelector('text=Envío terminado', { timeout: 30000 });
   assert.equal(brevo.st.enviados.length, 14);
   assert.equal(new Set(brevo.st.enviados.map((e) => e.to)).size, 14);
-  assert.ok(brevo.st.enviados.find((e) => e.to === 'ana.perez@example.com').html.includes(tokAna));
+  const mAna = brevo.st.enviados.find((e) => e.to === 'ana.perez@example.com');
+  assert.ok(mAna.html.includes(`/storage/v1/object/public/qr/${tokAna}.png`), 'imagen del QR desde Storage');
+  assert.ok(S.almacen.has(`qr/${tokAna}.png`), 'PNG subido a Storage');
+  assert.equal(Buffer.from(mAna.adjuntos[0].content, 'base64').subarray(1, 4).toString(), 'PNG');
+  const img = await fetch(`${S.url}/storage/v1/object/public/qr/${tokAna}.png`);
+  assert.equal(img.status, 200);
   await adm.click('[data-fin]');
   await adm.waitForSelector('#b-pend:has-text("(0)")');
   await adm.screenshot({ path: path.join(SHOTS, '08-correos.png') });

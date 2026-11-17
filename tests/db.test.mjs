@@ -389,6 +389,42 @@ await prueba('Dos administradores envían a la vez: ningún correo duplicado', a
   assert.equal(new Set(nuevos).size, nuevos.length, 'cada destinatario una sola vez');
 });
 
+await prueba('Envío DESDE LA PÁGINA (pg_net): reservar → despachar → respuesta de Brevo → estados; sin duplicados', async () => {
+  await q('update configuracion set brevo_api_base = $1', [brevo.base]);
+  await A('confirmar_importacion', { p_filas: [1, 2, 3, 4].map((i) => ({ nombre: 'Web ' + i, email: `web${i}@example.com` })).concat([{ nombre: 'Rebote', email: 'web.rebota@example.com' }]) });
+  await rechaza(S.llamar(laptop, 'preparar_envios', { p_modo: 'pendientes', p_ids: null, p_forzar: false, p_limite: 5 }), /administrador/);
+  const antes = brevo.st.enviados.length;
+  const r = await A('preparar_envios', { p_modo: 'pendientes', p_ids: null, p_forzar: false, p_limite: 10 });
+  assert.equal(r.lote.length, 5);
+  assert.equal((await A('preparar_envios', { p_modo: 'pendientes', p_ids: null, p_forzar: false, p_limite: 10 })).lote.length, 0, 'ya reservados: no se repiten');
+  for (const x of r.lote) {
+    const d = await A('despachar_envio', { p_envio: x.envio_id, p_html: `<p>Hola ${x.nombre}</p>`, p_texto: 'Hola', p_png_b64: Buffer.from('PNG').toString('base64') });
+    assert.equal(d.ok, true);
+    assert.equal((await A('despachar_envio', { p_envio: x.envio_id, p_html: 'x', p_texto: 'x', p_png_b64: '' })).ok, false, 'no se despacha dos veces');
+  }
+  let p, vueltas = 0;
+  do { await new Promise((ok) => setTimeout(ok, 400)); p = await A('procesar_envios'); vueltas++; } while (p.en_curso && vueltas < 30);
+  const est = await q("select email, correo_estado from participantes where email like 'web%' order by email");
+  assert.deepEqual(est.map((x) => x.correo_estado), ['fallido', 'aceptado', 'aceptado', 'aceptado', 'aceptado']);
+  assert.equal(brevo.st.enviados.length - antes, 4);
+  const e = (await q("select brevo_message_id, estado from envios_correo where destinatario = 'web1@example.com'"))[0];
+  assert.ok(e.brevo_message_id && e.estado === 'aceptado');
+});
+
+await prueba('Envío desde la página: clave mal configurada se detiene sin perder pendientes; correo de prueba', async () => {
+  await A('confirmar_importacion', { p_filas: [{ nombre: 'Clave mala', email: 'clave.mala@example.com' }] });
+  await A('guardar_brevo', { p_clave: 'xkeysib-clave-equivocada-0000000000', p_remitente: brevo.remitente, p_nombre: 'INNOMINING 2026' });
+  const r = await A('preparar_envios', { p_modo: 'pendientes', p_ids: null, p_forzar: false, p_limite: 5 });
+  for (const x of r.lote) await A('despachar_envio', { p_envio: x.envio_id, p_html: 'x', p_texto: 'x', p_png_b64: '' });
+  let p; for (let i = 0; i < 30; i++) { await new Promise((ok) => setTimeout(ok, 300)); p = await A('procesar_envios'); if (!p.en_curso) break; }
+  assert.match(p.detenido, /clave de Brevo/);
+  assert.equal((await q("select correo_estado from participantes where email='clave.mala@example.com'"))[0].correo_estado, 'pendiente');
+  await A('guardar_brevo', { p_clave: brevo.clave, p_remitente: brevo.remitente, p_nombre: 'INNOMINING 2026' });
+  await A('enviar_prueba', { p_destinatario: 'comite@example.com', p_html: '<p>prueba</p>', p_texto: 'prueba', p_png_b64: '' });
+  let pr = null; for (let i = 0; i < 30 && !pr; i++) { await new Promise((ok) => setTimeout(ok, 300)); pr = (await A('procesar_envios')).prueba; }
+  assert.equal(pr.resultado, 'aceptado');
+});
+
 await prueba('Webhook de Brevo: "delivered" → entregado; rechaza sin secreto', async () => {
   const e = (await q("select * from envios_correo where destinatario = 'mj.torres@example.com' and estado = 'aceptado'"))[0];
   const sin = await fetch(`${S.url}/functions/v1/brevo-webhook`, { method: 'POST', body: JSON.stringify({ event: 'delivered', 'message-id': e.brevo_message_id }) });

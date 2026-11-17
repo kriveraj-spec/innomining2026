@@ -51,3 +51,18 @@ export function qrDataUrl(token) {
   const q = qrcode(0, 'M'); q.addData(QR_PREFIX + token); q.make();
   return q.createDataURL(8, 4);
 }
+
+/** PNG del QR (con margen) para el correo: se sube a Storage y también va adjunto. */
+export function qrPngBlob(token, escala = 10) {
+  const q = qrcode(0, 'M'); q.addData(QR_PREFIX + token); q.make();
+  const n = q.getModuleCount(), m = 4, tam = (n + 2 * m) * escala;
+  const c = document.createElement('canvas'); c.width = tam; c.height = tam;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, tam, tam); g.fillStyle = '#000000';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect((k + m) * escala, (r + m) * escala, escala, escala);
+  return aBlob(c);
+}
+
+export function blobABase64(b) {
+  return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ko; r.readAsDataURL(b); });
+}

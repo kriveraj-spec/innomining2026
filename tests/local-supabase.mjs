@@ -65,6 +65,25 @@ export async function iniciar({ port = 0, database, env = {}, webDir = null } = 
     }
   }
 
+  // ---- Worker de pg_net: ejecuta las solicitudes encoladas y guarda la respuesta (como Supabase).
+  const almacen = new Map();
+  let trabajando = false;
+  const worker = setInterval(async () => {
+    if (trabajando) return; trabajando = true;
+    try {
+      const { rows } = await pool.query('update net.http_request_queue set procesado = true where id in (select id from net.http_request_queue where not procesado order by id limit 20) returning *');
+      await Promise.all(rows.map(async (q) => {
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), q.timeout_milliseconds || 5000);
+        try {
+          const r = await fetch(q.url, { method: 'POST', headers: q.headers, body: JSON.stringify(q.body), signal: ctl.signal });
+          await pool.query('insert into net._http_response (id, status_code, content, timed_out) values ($1, $2, $3, false)', [q.id, r.status, await r.text()]);
+        } catch (e) {
+          await pool.query('insert into net._http_response (id, timed_out, error_msg) values ($1, $2, $3)', [q.id, e.name === 'AbortError', e.name === 'AbortError' ? null : String(e.message)]);
+        } finally { clearTimeout(t); }
+      }));
+    } catch (_) { /* base cerrándose */ } finally { trabajando = false; }
+  }, 250);
+
   const deps = {
     env: (k) => (k in env ? env[k] : ''),
     fetch: (u, i) => fetch(u, i),
@@ -130,6 +149,37 @@ export async function iniciar({ port = 0, database, env = {}, webDir = null } = 
         }
       }
 
+      // ---------- Storage (subida con RLS como el usuario; lectura pública)
+      const so = url.pathname.match(/^\/storage\/v1\/object\/(public\/)?([a-z0-9_-]+)\/(.+)$/);
+      if (so) {
+        const bucket = so[2], nombre = decodeURIComponent(so[3]);
+        if (so[1] && req.method === 'GET') {
+          const b = almacen.get(bucket + '/' + nombre);
+          if (!b) { res.writeHead(404); return res.end(); }
+          res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(b);
+        }
+        if (req.method === 'POST' || req.method === 'PUT') {
+          const chunks = []; for await (const ch of req) chunks.push(ch);
+          let buf = Buffer.concat(chunks);
+          const i = buf.indexOf(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+          if (i > 0) { const fin = buf.lastIndexOf(Buffer.from('\r\n--')); buf = buf.subarray(i, fin > i ? fin : buf.length); }
+          const c = verificar((req.headers.authorization || '').replace(/^Bearer /, '')) || { role: 'anon' };
+          const cli = await pool.connect();
+          try {
+            await cli.query('begin');
+            await cli.query("select set_config('role', $1, true), set_config('request.jwt.claims', $2, true)", [c.role === 'authenticated' ? 'authenticated' : 'anon', JSON.stringify(c)]);
+            await cli.query('insert into storage.objects (bucket_id, name) values ($1, $2) on conflict (bucket_id, name) do update set name = excluded.name', [bucket, nombre]);
+            await cli.query('commit');
+          } catch (e) {
+            await cli.query('rollback').catch(() => {}); cli.release();
+            return enviarJson(res, 403, { statusCode: '403', error: 'Unauthorized', message: 'new row violates row-level security policy' });
+          }
+          cli.release();
+          almacen.set(bucket + '/' + nombre, buf);
+          return enviarJson(res, 200, { Key: `${bucket}/${nombre}` });
+        }
+      }
+
       // ---------- Edge Functions
       const f = url.pathname.match(/^\/functions\/v1\/([a-z-]+)$/);
       if (f) {
@@ -187,7 +237,8 @@ export async function iniciar({ port = 0, database, env = {}, webDir = null } = 
       const r = await fetch(`${base}/functions/v1/${nombre}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
       return { status: r.status, data: await r.json() };
     },
-    async cerrar() { await new Promise((ok) => server.close(ok)); await pool.end(); }
+    almacen,
+    async cerrar() { clearInterval(worker); await new Promise((ok) => server.close(ok)); await pool.end(); }
   };
 }
 
@@ -203,7 +254,7 @@ export async function baseNueva(nombre) {
   const raiz = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
   await c.query(fs.readFileSync(path.join(raiz, 'tests/supabase-stub.sql'), 'utf8'));
   for (const f of fs.readdirSync(path.join(raiz, 'supabase/migrations')).sort()) {
-    await c.query(fs.readFileSync(path.join(raiz, 'supabase/migrations', f), 'utf8'));
+    await c.query(fs.readFileSync(path.join(raiz, 'supabase/migrations', f), 'utf8').replace('create extension if not exists pg_net;', '-- pg_net: stub local'));
   }
   await c.end();
 }
