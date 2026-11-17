@@ -7,6 +7,7 @@
     "test:e2e": "node e2e.test.mjs"
   },
   "dependencies": {
+    "esbuild": "^0.24.2",
     "jszip": "3.10.1",
     "pg": "8.13.3",
     "qrcode-generator": "1.4.4"

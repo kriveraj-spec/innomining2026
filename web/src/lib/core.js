@@ -101,4 +101,8 @@ export const ESTADO_CORREO = {
   entregado: ['ok', 'Entregado'], fallido: ['bad', 'Fallido'], incierto: ['warn', 'Por verificar']
 };
 export function chipCorreo(e) { const x = ESTADO_CORREO[e] || ['', e]; return `<span class="chip ${x[0]}">${x[1]}</span>`; }
-export function chipOrigen(o) { return o === 'presencial' ? '<span class="chip info">Presencial</span>' : '<span class="chip">Inscripción previa</span>'; }
+export function chipOrigen(o) { return o === 'presencial' ? '<span class="chip info">En puerta</span>' : '<span class="chip">Preinscrito</span>'; }
+
+// Día del congreso elegido en este dispositivo (1, 2 o 3).
+export function getDia() { try { const d = Number(localStorage.getItem('im26-dia')); return d >= 1 && d <= 3 ? d : null; } catch (_) { return null; } }
+export function setDia(d) { try { localStorage.setItem('im26-dia', String(d)); } catch (_) { /* sin almacenamiento */ } }

@@ -1,44 +1,46 @@
 // Administración de participantes: importar, buscar, editar, QR, ZIP, exportar y envío a seleccionados.
-import { rpc, $, $$, h, toast, modal, cerrarModal, confirmar, progreso, descargar, hoyArchivo, plural, norm, chipCorreo, chipOrigen } from '../lib/core.js';
+import { rpc, $, $$, h, toast, modal, cerrarModal, confirmar, progreso, descargar, hoyArchivo, plural, norm, chipCorreo, chipOrigen, getDia } from '../lib/core.js';
 import { credencial, aBlob, nombreArchivo } from '../lib/qr.js';
 import { leerArchivo, detectar, aplicar } from '../lib/archivo.js';
 import { enviarConProgreso, vistaPrevia } from './correos.js';
 
-let root, lista = [], sel = new Set();
+let root, lista = [], sel = new Set(), grupo = 'todos';
 
 export async function render(r) {
   root = r;
   root.innerHTML = `
     <div class="page-head">
-      <div><h1>Participantes <span class="muted num" id="n" style="font-weight:400"></span></h1><p>Inscritos y registrados en puerta, en una sola base.</p></div>
+      <div><h1>Inscritos <span class="muted num" id="n" style="font-weight:400"></span></h1><p>Todas las personas con QR: preinscritas (su lista) y las que se inscriben en la puerta.</p></div>
       <div class="row">
         <button class="btn" id="b-imp">Importar</button>
         <button class="btn" id="b-add">Agregar</button>
         <button class="btn primary" id="b-qr">Generar QR pendientes</button>
       </div>
     </div>
+    <div class="tabs-dia" id="grupos" style="margin-bottom:14px">
+      <button data-g="todos">Todos<b id="g-todos"></b></button><button data-g="previo">Preinscritos<b id="g-previo"></b></button><button data-g="presencial">Inscritos en puerta<b id="g-presencial"></b></button>
+    </div>
     <div class="toolbar">
       <input id="q" type="search" placeholder="Buscar por nombre, correo o código">
       <select id="f" aria-label="Filtro">
         <option value="">Todos</option>
-        <option value="previo">Inscripción previa</option>
-        <option value="presencial">Registro presencial</option>
         <option value="sinqr">QR pendiente</option>
         <option value="cpend">Correo pendiente</option>
         <option value="cmal">Correo fallido o por verificar</option>
-        <option value="hoy">Ingresaron hoy</option>
-        <option value="nohoy">No ingresaron hoy</option>
+        <option value="hoy">Ingresaron (Día ${getDia()})</option>
+        <option value="nohoy">No ingresaron (Día ${getDia()})</option>
       </select>
       <button class="btn" id="b-zip">Descargar QR (ZIP)</button>
       <button class="btn" id="b-csv">Exportar CSV</button>
     </div>
     <div class="selbar" id="selbar" hidden><b id="sel-n"></b><button class="btn sm primary" id="sel-env">Enviar QR por correo</button><button class="btn sm ghost" id="sel-x">Quitar selección</button></div>
     <div class="table-wrap"><table class="t">
-      <thead><tr><th style="width:36px"><input type="checkbox" id="todos" aria-label="Seleccionar todos"></th><th>Participante</th><th class="hide-m">Código</th><th class="hide-m">Origen</th><th class="hide-m">QR</th><th>Correo</th><th>Hoy</th></tr></thead>
+      <thead><tr><th style="width:36px"><input type="checkbox" id="todos" aria-label="Seleccionar todos"></th><th>Participante</th><th class="hide-m">Código</th><th class="hide-m">Inscripción</th><th class="hide-m">QR</th><th>Correo</th><th>Día ${getDia()}</th></tr></thead>
       <tbody id="tb"><tr><td colspan="7" class="empty">Cargando…</td></tr></tbody>
     </table></div>
     <p class="small muted" id="pie" style="margin-top:10px"></p>`;
   $('#q', root).addEventListener('input', pintar);
+  $('#grupos', root).addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) { grupo = b.dataset.g; pintar(); } });
   $('#f', root).addEventListener('change', pintar);
   $('#b-imp', root).onclick = importar;
   $('#b-add', root).onclick = () => editar(null);
@@ -67,13 +69,13 @@ export async function refrescar() {
 function filtrados() {
   const q = norm($('#q', root).value.trim()), f = $('#f', root).value;
   return lista.filter((p) => {
-    if (f === 'previo' && p.origen !== 'previo') return false;
-    if (f === 'presencial' && p.origen !== 'presencial') return false;
+    if (grupo !== 'todos' && p.origen !== grupo) return false;
     if (f === 'sinqr' && p.qr_token) return false;
     if (f === 'cpend' && p.correo_estado !== 'pendiente') return false;
     if (f === 'cmal' && !['fallido', 'incierto'].includes(p.correo_estado)) return false;
-    if (f === 'hoy' && !p.ingreso_hoy) return false;
-    if (f === 'nohoy' && p.ingreso_hoy) return false;
+    const dia = (p.ingreso_dias || {})[getDia()];
+    if (f === 'hoy' && !dia) return false;
+    if (f === 'nohoy' && dia) return false;
     return !q || norm(`${p.nombre} ${p.email} ${p.codigo} ${p.institucion}`).includes(q);
   });
 }
@@ -82,6 +84,10 @@ function pintar() {
   const rows = filtrados();
   const pend = lista.filter((p) => !p.qr_token).length;
   $('#n', root).textContent = lista.length;
+  root.querySelectorAll('#grupos [data-g]').forEach((b) => b.classList.toggle('on', b.dataset.g === grupo));
+  $('#g-todos', root).textContent = lista.length;
+  $('#g-previo', root).textContent = lista.filter((p) => p.origen === 'previo').length;
+  $('#g-presencial', root).textContent = lista.filter((p) => p.origen === 'presencial').length;
   $('#b-qr', root).textContent = pend ? `Generar QR pendientes (${pend})` : 'QR al día';
   $('#b-qr', root).disabled = !pend;
   $('#tb', root).innerHTML = rows.length ? rows.map((p) => `<tr class="click${sel.has(p.id) ? ' sel' : ''}" data-id="${h(p.id)}">
@@ -91,7 +97,7 @@ function pintar() {
       <td class="hide-m">${chipOrigen(p.origen)}</td>
       <td class="hide-m">${p.qr_token ? '<span class="chip ok">Generado</span>' : '<span class="chip warn">Pendiente</span>'}</td>
       <td>${chipCorreo(p.correo_estado)}</td>
-      <td>${p.ingreso_hoy ? `<span class="chip ok">${h(p.ingreso_hoy.slice(0, 5))}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')
+      <td>${(p.ingreso_dias || {})[getDia()] ? `<span class="chip ok">${h(p.ingreso_dias[getDia()].slice(0, 5))}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')
     : `<tr><td colspan="7" class="empty">${lista.length ? 'Ningún participante coincide.' : 'Aún no hay participantes. Use «Importar» para cargar el Excel o CSV de inscritos.'}</td></tr>`;
   $('#pie', root).textContent = rows.length !== lista.length ? `Mostrando ${rows.length} de ${lista.length}` : '';
   $('#todos', root).checked = rows.length > 0 && rows.every((p) => sel.has(p.id));
@@ -115,7 +121,7 @@ function detalle(p) {
           <dt>Institución</dt><dd>${h(p.institucion || '—')}</dd>
           <dt>Origen</dt><dd>${chipOrigen(p.origen)}</dd>
           <dt>Envío</dt><dd>${chipCorreo(p.correo_estado)}${p.correo_fecha ? ` <span class="small muted">${h(p.correo_fecha)}</span>` : ''}${p.correo_error ? `<div class="small" style="color:var(--bad);margin-top:4px">${h(p.correo_error)}</div>` : ''}</dd>
-          <dt>Asistencias</dt><dd>${p.asistencias.length ? p.asistencias.map((a) => `${h(a.fecha)} · ${h(a.hora)} <span class="small muted">(${h(a.metodo)})</span>`).join('<br>') : '<span class="muted">Sin ingresos</span>'}</dd>
+          <dt>Asistencias</dt><dd>${p.asistencias.length ? p.asistencias.map((a) => `<b>Día ${a.dia}</b> · ${h(a.fecha)} ${h(a.hora)} <span class="small muted">(${h(a.metodo)})</span>`).join('<br>') : '<span class="muted">Sin ingresos</span>'}</dd>
         </dl>
       </div>
     </div>
@@ -223,9 +229,9 @@ function csv(v) {
 async function exportar() {
   try {
     const x = await rpc('exportar_registros');
-    const cols = ['id', 'codigo', 'nombre', 'email', 'institucion', 'origen', 'qr', 'correo', 'primer_ingreso', ...x.fechas.map((f) => `ingreso_${f}`)];
-    const filas = x.filas.map((r) => [r.id, r.codigo, r.nombre, r.email, r.institucion, r.origen, r.qr, r.correo, r.primer_ingreso || '',
-      ...x.fechas.map((f) => (r.asistencias && r.asistencias[f]) || '')].map(csv).join(','));
+    const cols = ['id', 'codigo', 'nombre', 'email', 'institucion', 'origen', 'qr', 'correo', 'ingreso_dia1', 'ingreso_dia2', 'ingreso_dia3'];
+    const filas = x.filas.map((r) => [r.id, r.codigo, r.nombre, r.email, r.institucion, r.origen, r.qr, r.correo,
+      ...[1, 2, 3].map((d) => (r.asistencias && r.asistencias['dia' + d]) || '')].map(csv).join(','));
     descargar(new Blob([String.fromCharCode(0xfeff) + [cols.join(','), ...filas].join('\n')], { type: 'text/csv;charset=utf-8' }), `innomining2026_registros_${hoyArchivo()}.csv`);
     toast(`Exportados ${x.filas.length} participantes`);
   } catch (e) { toast(e.message, true); }

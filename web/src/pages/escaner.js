@@ -1,5 +1,5 @@
 // Puesto celular: cámara + validación en el servidor.
-import { rpc, $, h } from '../lib/core.js';
+import { rpc, $, h, getDia } from '../lib/core.js';
 
 let root, jsQR = null;
 const S = { stream: null, facing: 'environment', ocupado: false, ultimo: '', ultimoEn: 0, timer: 0, ocultar: 0, cv: document.createElement('canvas'), wake: null };
@@ -7,7 +7,7 @@ const S = { stream: null, facing: 'environment', ocupado: false, ultimo: '', ult
 export async function render(r) {
   root = r;
   root.innerHTML = `<div class="scan-page">
-    <div class="scan-top"><a href="#/inicio">← Salir</a><span class="count"><b id="n">–</b> ingresaron hoy</span></div>
+    <div class="scan-top"><a href="#/inicio">← Salir</a><span class="count">Día ${getDia()} · <b id="n">–</b> ingresaron</span></div>
     <div class="cam">
       <video id="v" playsinline muted></video>
       <div class="frame"></div>
@@ -28,7 +28,7 @@ export function salir() { detener(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') detener(); });
 
 export async function refrescar() {
-  try { const r = await rpc('ultimos_ingresos'); const n = $('#n', root); if (n) n.textContent = r.ingresos_hoy; } catch (_) { /* reintento automático */ }
+  try { const r = await rpc('ultimos_ingresos', { p_dia: getDia() }); const n = $('#n', root); if (n) n.textContent = r.ingresos; } catch (_) { /* reintento automático */ }
 }
 
 async function iniciar() {
@@ -97,14 +97,14 @@ async function leido(texto) {
   S.ultimo = texto; S.ultimoEn = ahora; S.ocupado = true;
   mostrar('wait', '<div class="t1">VALIDANDO…</div>');
   try {
-    const r = await rpc('registrar_ingreso_qr', { p_qr: texto });
+    const r = await rpc('registrar_ingreso_qr', { p_qr: texto, p_dia: getDia() });
     if (r.estado === 'ok') {
       navigator.vibrate && navigator.vibrate(120);
-      mostrar('ok', `<div class="t1">✓ INGRESO REGISTRADO</div><div class="t2">${h(r.nombre)}</div><div class="t3">${h(r.fecha)} · ${h(r.hora)}</div><div class="t4">Toque para continuar</div>`, 2500);
+      mostrar('ok', `<div class="t1">✓ INGRESO REGISTRADO</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia} · ${h(r.fecha)} · ${h(r.hora)}</div><div class="t4">Toque para continuar</div>`, 2500);
       refrescar();
     } else if (r.estado === 'ya') {
       navigator.vibrate && navigator.vibrate([80, 60, 80]);
-      mostrar('ya', `<div class="t1">INGRESO YA REGISTRADO</div><div class="t2">${h(r.nombre)}</div><div class="t3">Ingresó el ${h(r.fecha)} a las ${h(r.hora)}</div><div class="t4">No se registró de nuevo · Toque para continuar</div>`, 4000);
+      mostrar('ya', `<div class="t1">INGRESO YA REGISTRADO</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia}: ingresó a las ${h(r.hora)}</div><div class="t4">No se registró de nuevo · Toque para continuar</div>`, 4000);
     } else {
       navigator.vibrate && navigator.vibrate([200, 80, 200]);
       mostrar('bad', `<div class="t1">⚠ QR NO VÁLIDO</div><div class="t3" style="margin-top:12px">${h(r.msg)}</div><div class="t4">No se registró el ingreso · Toque para continuar</div>`, 4500);

@@ -131,6 +131,20 @@ table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
 .result .t3 { color: var(--text-2); font-size: 14px; margin-top: 4px; }
 .result .row { margin-top: 12px; }
 
+/* ---------- Pestañas ---------- */
+.tabs-dia { display: inline-flex; gap: 4px; padding: 4px; background: var(--bg-2); border-radius: 999px; flex-wrap: wrap; }
+.tabs-dia button { border: 0; background: none; padding: 8px 18px; border-radius: 999px; font: 500 14px var(--font); color: var(--text-2); cursor: pointer; }
+.tabs-dia button.on { background: var(--bg); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.tabs-dia button b { font-weight: 500; color: var(--muted); margin-left: 4px; }
+
+/* ---------- Selector de día ---------- */
+.dias { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.dia { display: grid; justify-items: center; gap: 2px; padding: 28px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); cursor: pointer; font: inherit; color: var(--text); }
+.dia span { font-size: 15px; color: var(--text-2); }
+.dia b { font-size: 44px; line-height: 1.1; font-weight: 600; color: var(--accent); }
+.dia:hover, .dia.on { border-color: var(--accent); background: #fbfbff; }
+.dia-chip { display: inline-flex; align-items: center; gap: 6px; }
+
 /* ---------- Escáner ---------- */
 .scan-page { min-height: 100vh; display: flex; flex-direction: column; background: #0f0f14; color: #fff; }
 .scan-top { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); }

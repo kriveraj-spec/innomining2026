@@ -56,7 +56,9 @@ const nueva = async (opts, etiqueta) => {
 };
 async function entrar(p) {
   await p.goto(`${S.url}/#k=${CODIGO}`); // el link de acceso compartido
-  await p.waitForSelector('.modes');
+  await p.waitForSelector('.dias');       // primero: elegir el día
+  await p.click('[data-d="1"]');
+  await p.waitForSelector('.modes');      // luego: Organizador o Puerta
   assert.ok(!p.url().includes(CODIGO), 'el código no queda visible en la barra');
 }
 
@@ -70,9 +72,12 @@ await paso('Acceso sin cuentas: código incorrecto rechazado; el link de acceso 
   await adm.screenshot({ path: path.join(SHOTS, '01-acceso.png') });
   await entrar(adm);
   await adm.reload();
-  await adm.waitForSelector('.modes'); // queda recordado: entra directo al selector
+  await adm.waitForSelector('.dias'); // queda recordado: entra directo, sin código
+  await adm.screenshot({ path: path.join(SHOTS, '02-elegir-dia.png') });
+  await adm.click('[data-d="1"]');
+  await adm.waitForSelector('.modes');
   assert.match(await adm.textContent('.modes'), /Organizador[\s\S]*Puerta/);
-  await adm.screenshot({ path: path.join(SHOTS, '02-elegir-modo.png') });
+  await adm.screenshot({ path: path.join(SHOTS, '02b-elegir-modo.png') });
   await adm.click('.mode[href="#/registro"]');
   await adm.click('.nav[href="#/resumen"]');
   await adm.waitForSelector('#stats .stat');
@@ -236,7 +241,7 @@ await paso('14. Sin conexión en la laptop: avisa que NO se registró; al volver
 await paso('10. Sincronización: el panel del admin muestra los ingresos de ambos puestos sin recargar', async () => {
   await adm.click('.nav[href="#/resumen"]');
   await adm.waitForFunction(() => {
-    const s = [...document.querySelectorAll('#stats .stat')].find((x) => /Ingresaron hoy/.test(x.textContent));
+    const s = [...document.querySelectorAll('#stats .stat')].find((x) => /Ingresos Día 1/.test(x.textContent));
     return s && s.querySelector('b').textContent === '5';
   }, null, { timeout: 15000 });
   await adm.screenshot({ path: path.join(SHOTS, '13-inicio-sincronizado.png') });
@@ -244,7 +249,7 @@ await paso('10. Sincronización: el panel del admin muestra los ingresos de ambo
 
 await paso('13. Envío posterior a presenciales: seleccionar y enviar; llega el MISMO QR', async () => {
   await adm.click('.nav[href="#/participantes"]');
-  await adm.selectOption('#f', 'presencial');
+  await adm.click('#grupos [data-g="presencial"]');
   await adm.waitForFunction(() => document.querySelectorAll('#tb tr[data-id]').length === 2);
   await adm.check('#todos');
   await adm.click('#sel-env'); await adm.click('#s-ok');
@@ -255,10 +260,29 @@ await paso('13. Envío posterior a presenciales: seleccionar y enviar; llega el 
   await adm.click('[data-fin]');
 });
 
+await paso('Inscritos (pestañas Preinscritos / En puerta) y Asistencia por día separadas', async () => {
+  await adm.click('.nav[href="#/participantes"]');
+  await adm.click('#grupos [data-g="presencial"]');
+  await adm.waitForFunction(() => document.querySelectorAll('#tb tr[data-id]').length === 2);
+  await adm.click('#grupos [data-g="previo"]');
+  await adm.waitForFunction(() => document.querySelectorAll('#tb tr[data-id]').length === 14);
+  await adm.screenshot({ path: path.join(SHOTS, '05b-inscritos.png') });
+  await adm.click('#grupos [data-g="todos"]');
+  await adm.click('.nav[href="#/asistencia"]');
+  await adm.waitForFunction(() => /Ingresaron el Día 1/.test(document.querySelector('#st')?.textContent || ''));
+  const n1 = await adm.$$eval('#tb tr', (r) => r.length);
+  assert.equal(n1, 5);
+  await adm.click('#tabs [data-d="2"]');
+  await adm.waitForFunction(() => /Ingresaron el Día 2/.test(document.querySelector('#st').textContent));
+  await adm.click('#tabs [data-d="1"]');
+  await adm.waitForSelector('#tb tr:has-text("En puerta")');
+  await adm.screenshot({ path: path.join(SHOTS, '13b-asistencia.png') });
+});
+
 await paso('9. Persistencia: tras recargar todo sigue en la base central', async () => {
   await adm.reload();
+  await adm.click('.nav[href="#/participantes"]');
   await adm.waitForSelector('#tb tr[data-id]');
-  await adm.selectOption('#f', '');
   await adm.waitForFunction(() => document.querySelectorAll('#tb tr[data-id]').length === 16);
 });
 
@@ -266,19 +290,35 @@ await paso('15. Exportar CSV con id, correo normalizado, origen y asistencia por
   const [dl] = await Promise.all([adm.waitForEvent('download'), adm.click('#b-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   const lineas = csv.trim().split('\n');
-  assert.match(lineas[0], /^.?id,codigo,nombre,email,institucion,origen,qr,correo,primer_ingreso,ingreso_\d\d\/\d\d\/\d{4}/);
+  assert.match(lineas[0], /^.?id,codigo,nombre,email,institucion,origen,qr,correo,ingreso_dia1,ingreso_dia2,ingreso_dia3$/);
   assert.equal(lineas.length, 17);
   assert.ok(lineas.some((l) => l.includes('hugo.salas@example.com') && l.includes('Registro presencial')));
   fs.copyFileSync(await dl.path(), path.join(SHOTS, 'exportacion.csv'));
 });
 
-await paso('Configuración: fechas del evento y modo prueba', async () => {
+await paso('Configuración: fecha y lugar aparecen en la vista previa del correo', async () => {
   await adm.click('.nav[href="#/configuracion"]');
-  await adm.fill('#nueva', '2026-11-18'); await adm.click('#agregar');
-  await adm.click('#guardar');
-  await adm.waitForSelector('text=Configuración guardada');
-  assert.equal((await q('select array_length(fechas_evento,1) n from configuracion'))[0].n, 1);
+  await adm.fill('#e-fecha', '18, 19 y 20 de noviembre de 2026');
+  await adm.fill('#e-lugar', 'Auditorio principal UNSA');
+  await adm.click('#e-guardar');
+  await adm.waitForSelector('text=Datos del congreso guardados');
   await adm.screenshot({ path: path.join(SHOTS, '14-configuracion.png') });
+  await adm.click('.nav[href="#/correos"]');
+  await adm.click('#b-prev');
+  await adm.frameLocator('iframe.mail-frame').locator('text=Auditorio principal UNSA').waitFor();
+  await adm.screenshot({ path: path.join(SHOTS, '07b-correo-con-evento.png') });
+  await adm.click('#modal [data-cerrar]');
+});
+
+await paso('Día 2: el mismo QR registra un ingreso nuevo; Día 1 conserva el suyo', async () => {
+  await cel.goto(S.url + '/#/inicio');
+  await cel.waitForSelector('.dias');
+  await cel.click('[data-d="2"]');
+  await cel.click('.mode[href="#/escaner"]');
+  await cel.waitForSelector('#res.ok', { timeout: 20000 });
+  assert.match(await cel.textContent('#res'), /Día 2/);
+  const dias = await q("select dia from asistencias a join participantes p on p.id=a.participante_id where p.email='ana.perez@example.com' order by dia");
+  assert.deepEqual(dias.map((x) => x.dia), [1, 2]);
 });
 
 await paso('Celular: vista móvil sin desplazamiento horizontal', async () => {

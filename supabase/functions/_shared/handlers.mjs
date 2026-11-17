@@ -22,13 +22,12 @@ async function config(env, fetchImpl, rpc) {
   const supa = (env('SUPABASE_URL') || '').replace(/\/$/, '');
   // Prioridad: secretos de Supabase (variables de entorno); si no, lo guardado desde el panel (Vault).
   let db = {};
-  if (!env('BREVO_API_KEY') || !env('BREVO_SENDER_EMAIL')) {
-    try { db = (await rpc('srv_config_brevo', {})) || {}; } catch (_) { db = {}; }
-  }
+  try { db = (await rpc('srv_config_brevo', {})) || {}; } catch (_) { db = {}; }
   return {
     brevo: { base: env('BREVO_API_BASE') || BREVO_BASE, key: normalizarClave(env('BREVO_API_KEY') || db.clave), fetch: fetchImpl, timeoutMs: Number(env('BREVO_TIMEOUT_MS')) || 20000 },
     remitente: { email: (env('BREVO_SENDER_EMAIL') || db.remitente || '').trim(), name: (env('BREVO_SENDER_NAME') || db.nombre || 'INNOMINING 2026').trim() },
     replyTo: (env('BREVO_REPLY_TO') || '').trim(),
+    evento: { fecha: db.evento_fecha || '', lugar: db.evento_lugar || '' },
     qrUrl: env('PUBLIC_QR_URL') || `${supa}/functions/v1/qr`
   };
 }
@@ -42,7 +41,7 @@ function faltantes(c) {
 
 async function payloadAcreditacion(c, x, envioId) {
   const png = await qrPng(QR_PREFIX + x.qr_token, 10);
-  const d = { nombre: x.nombre, codigo: x.codigo, imgSrc: `${c.qrUrl}?t=${x.qr_token}` };
+  const d = { nombre: x.nombre, codigo: x.codigo, imgSrc: `${c.qrUrl}?t=${x.qr_token}`, fecha: c.evento.fecha, lugar: c.evento.lugar };
   const p = {
     sender: c.remitente,
     to: [x.nombre ? { email: x.email, name: x.nombre } : { email: x.email }],

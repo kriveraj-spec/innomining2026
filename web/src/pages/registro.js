@@ -1,5 +1,5 @@
 // Puesto laptop: registro presencial en un paso + búsqueda de inscritos sin QR.
-import { rpc, $, h, toast, modal, cerrarModal, chipOrigen } from '../lib/core.js';
+import { rpc, $, h, toast, modal, cerrarModal, getDia } from '../lib/core.js';
 
 let root, ultimo = null, tBusca;
 
@@ -8,7 +8,7 @@ export async function render(r) {
   root.innerHTML = `
     <div class="page-head">
       <div><h1>Registro presencial</h1><p>Para quienes llegan sin inscripción o sin su QR.</p></div>
-      <span class="chip acc" id="cnt">— ingresaron hoy</span>
+      <span class="chip acc" id="cnt">Día ${getDia()}</span>
     </div>
     <div class="grid2">
       <div class="card">
@@ -29,7 +29,7 @@ export async function render(r) {
           <ul class="list" id="qres" style="margin-top:8px"></ul>
         </div>
         <div class="card">
-          <h2 style="margin-bottom:6px">Últimos ingresos de hoy</h2>
+          <h2 style="margin-bottom:6px">Últimos ingresos · Día ${getDia()}</h2>
           <ul class="list" id="feed"><li class="muted">Cargando…</li></ul>
         </div>
       </div>
@@ -49,10 +49,10 @@ export async function render(r) {
 
 export async function refrescar() {
   try {
-    const r = await rpc('ultimos_ingresos');
-    $('#cnt', root).textContent = `${r.ingresos_hoy} de ${r.total} ingresaron hoy`;
+    const r = await rpc('ultimos_ingresos', { p_dia: getDia() });
+    $('#cnt', root).textContent = `Día ${r.dia} · ${r.ingresos} de ${r.total} ingresaron`;
     $('#feed', root).innerHTML = r.ultimos.length ? r.ultimos.map((x) => `<li><div><div>${h(x.nombre)}</div><div class="small muted">${h(x.codigo)} · ${x.metodo === 'escaneo' ? 'escaneo' : 'registro presencial'} · ${h(x.operador || '')}</div></div><span class="mono small">${h(x.hora)}</span></li>`).join('')
-      : '<li class="muted">Aún no hay ingresos hoy.</li>';
+      : '<li class="muted">Aún no hay ingresos en este día.</li>';
   } catch (_) { /* se reintenta en el siguiente ciclo */ }
 }
 
@@ -72,17 +72,17 @@ async function registrar(confirmar, d) {
   if (!d.p_email.trim()) { $('#f-email', root).focus(); return mostrar('bad', 'FALTA EL CORREO', '', 'El correo es necesario para enviarle su QR.'); }
   const b = $('#f-btn', root); b.disabled = true; b.textContent = 'Registrando…';
   try {
-    const r = await rpc('registrar_presencial', { ...d, p_confirmar: confirmar });
+    const r = await rpc('registrar_presencial', { ...d, p_confirmar: confirmar, p_dia: getDia() });
     if (r.estado === 'nuevo' || r.estado === 'ok') {
       ultimo = r;
       mostrar('ok', '✓ INGRESO REGISTRADO', r.nombre,
-        `${h(r.codigo)} · ${h(r.fecha)} · ${h(r.hora)}<br>${r.estado === 'nuevo'
+        `Día ${r.dia} · ${h(r.codigo)} · ${h(r.fecha)} · ${h(r.hora)}<br>${r.estado === 'nuevo'
           ? 'Nuevo participante. Su QR quedó guardado y <b>pendiente de envío</b> por correo.'
           : 'Inscripción previa: ingreso confirmado. Usará su mismo QR.'}`,
         r.estado === 'nuevo' ? '<button class="btn sm" data-corregir>Corregir datos</button>' : '');
       limpiar(); refrescar();
     } else if (r.estado === 'ya') {
-      mostrar('ya', 'INGRESO YA REGISTRADO HOY', r.nombre, `${h(r.codigo)} · ingresó a las <b>${h(r.hora)}</b> (${h(r.metodo)}${r.operador ? ', ' + h(r.operador) : ''}). No se creó otro registro.`);
+      mostrar('ya', `INGRESO YA REGISTRADO EN EL DÍA ${r.dia}`, r.nombre, `${h(r.codigo)} · ingresó a las <b>${h(r.hora)}</b> (${h(r.metodo)}${r.operador ? ', ' + h(r.operador) : ''}). No se creó otro registro.`);
       limpiar();
     } else if (r.estado === 'existe') {
       mostrar('ya', 'ESTE CORREO YA ESTÁ REGISTRADO', r.nombre,
@@ -119,9 +119,9 @@ async function buscar(q) {
   const ul = $('#qres', root);
   ul.innerHTML = '<li class="muted small">Buscando…</li>';
   try {
-    const rs = await rpc('buscar_participantes', { p_q: q });
+    const rs = await rpc('buscar_participantes', { p_q: q, p_dia: getDia() });
     ul.innerHTML = rs.length ? rs.map((x) => `<li><div><div>${h(x.nombre)}</div><div class="small muted">${h(x.codigo)} · ${h(x.email)}${x.institucion ? ' · ' + h(x.institucion) : ''}</div></div>
-      ${x.ingreso_hoy ? `<span class="chip ok">Ingresó ${h(x.ingreso_hoy.slice(0, 5))}</span>` : `<button class="btn sm primary" data-id="${h(x.id)}">Registrar ingreso</button>`}</li>`).join('')
+      ${x.ingreso_dia ? `<span class="chip ok">Ingresó ${h(x.ingreso_dia.slice(0, 5))}</span>` : `<button class="btn sm primary" data-id="${h(x.id)}">Registrar ingreso</button>`}</li>`).join('')
       : '<li class="muted small">Sin resultados. Si no está inscrito, regístrelo con el formulario.</li>';
   } catch (e) { ul.innerHTML = `<li class="error">${h(e.message)}</li>`; }
 }
@@ -130,9 +130,9 @@ async function ingresoPorId(e) {
   const b = e.target.closest('[data-id]'); if (!b) return;
   b.disabled = true; b.textContent = 'Registrando…';
   try {
-    const r = await rpc('registrar_ingreso_id', { p_id: b.dataset.id });
-    if (r.estado === 'ok') mostrar('ok', '✓ INGRESO REGISTRADO', r.nombre, `${h(r.codigo)} · ${h(r.fecha)} · ${h(r.hora)}<br>Inscrito previamente; conserva su mismo QR.`);
-    else mostrar('ya', 'INGRESO YA REGISTRADO HOY', r.nombre, `Ingresó a las <b>${h(r.hora)}</b>.`);
+    const r = await rpc('registrar_ingreso_id', { p_id: b.dataset.id, p_dia: getDia() });
+    if (r.estado === 'ok') mostrar('ok', '✓ INGRESO REGISTRADO', r.nombre, `Día ${r.dia} · ${h(r.codigo)} · ${h(r.fecha)} · ${h(r.hora)}<br>Inscrito previamente; conserva su mismo QR.`);
+    else mostrar('ya', `INGRESO YA REGISTRADO EN EL DÍA ${r.dia}`, r.nombre, `Ingresó a las <b>${h(r.hora)}</b>.`);
     buscar($('#q', root).value.trim()); refrescar();
   } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Registrar ingreso'; }
 }

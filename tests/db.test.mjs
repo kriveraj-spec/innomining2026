@@ -45,7 +45,7 @@ const inscritos = [
 // ===================================================================== Seguridad
 await prueba('Seguridad: anónimo no puede llamar funciones ni leer tablas', async () => {
   await rechaza(S.llamar(null, 'listar_participantes'));
-  await rechaza(S.llamar(null, 'registrar_ingreso_qr', { p_qr: 'IM26:' + '0'.repeat(32) }));
+  await rechaza(S.llamar(null, 'registrar_ingreso_qr', { p_qr: 'IM26:' + '0'.repeat(32), p_dia: 1 }));
   const c = await S.pool.connect();
   try {
     await c.query('begin; set local role anon');
@@ -139,7 +139,7 @@ await prueba('5. Editar nombre y correo conserva el mismo id y el mismo QR', asy
 const tok = async (email) => 'IM26:' + (await q('select qr_token from participantes where email = $1', [email]))[0].qr_token;
 let anaHora;
 await prueba('8. Escaneo desde celular: INGRESO REGISTRADO con hora del servidor (Lima)', async () => {
-  const r = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: await tok('ana.perez@example.com') });
+  const r = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: await tok('ana.perez@example.com'), p_dia: 1 });
   assert.equal(r.estado, 'ok');
   assert.equal(r.nombre, 'Ana Lucía Pérez Quispe');
   assert.match(r.hora, /^\d\d:\d\d:\d\d$/);
@@ -149,35 +149,35 @@ await prueba('8. Escaneo desde celular: INGRESO REGISTRADO con hora del servidor
 });
 
 await prueba('11. Lectura repetida: INGRESO YA REGISTRADO con la hora original, sin nueva asistencia', async () => {
-  const r = await S.llamar(laptop, 'registrar_ingreso_qr', { p_qr: await tok('ana.perez@example.com') });
+  const r = await S.llamar(laptop, 'registrar_ingreso_qr', { p_qr: await tok('ana.perez@example.com'), p_dia: 1 });
   assert.deepEqual([r.estado, r.hora], ['ya', anaHora]);
   assert.equal((await q("select count(*)::int n from asistencias a join participantes p on p.id=a.participante_id where p.email='ana.perez@example.com'"))[0].n, 1);
 });
 
 await prueba('11. 20 escaneos simultáneos del mismo QR desde 2 operadores → 1 sola asistencia', async () => {
   const t = await tok('lucia.fernandez@example.com');
-  const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => S.llamar(i % 2 ? celular : laptop, 'registrar_ingreso_qr', { p_qr: t })));
+  const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => S.llamar(i % 2 ? celular : laptop, 'registrar_ingreso_qr', { p_qr: t, p_dia: 1 })));
   assert.equal(rs.filter((r) => r.estado === 'ok').length, 1);
   assert.equal(rs.filter((r) => r.estado === 'ya').length, 19);
   assert.equal(new Set(rs.map((r) => r.hora)).size, 1, 'todos ven la misma hora original');
 });
 
 await prueba('QR inválido, ajeno y anulado: no registran ingreso', async () => {
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'https://otro.com' })).estado, 'invalido');
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + 'a'.repeat(32) })).estado, 'invalido');
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'https://otro.com', p_dia: 1 })).estado, 'invalido');
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + 'a'.repeat(32), p_dia: 1 })).estado, 'invalido');
   const p = (await q("select * from participantes where email = 'diego.ramirez@example.com'"))[0];
   const viejo = 'IM26:' + p.qr_token;
   const n = await A('anular_qr', { p_id: p.id, p_motivo: 'Compartido en redes' });
   assert.notEqual(n.qr_token, p.qr_token);
-  const r = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: viejo });
+  const r = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: viejo, p_dia: 1 });
   assert.equal(r.estado, 'anulado');
   assert.equal((await q('select count(*)::int n from asistencias where participante_id = $1', [p.id]))[0].n, 0);
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + n.qr_token })).estado, 'ok');
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + n.qr_token, p_dia: 1 })).estado, 'ok');
 });
 
 // ===================================================================== 7 Registro presencial
 await prueba('7. Registro presencial: crea participante + QR + asistencia en una operación; correo pendiente', async () => {
-  const r = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Hugo Salas Ccama', p_email: 'Hugo.Salas@Example.com', p_institucion: 'UNJBG', p_confirmar: false });
+  const r = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Hugo Salas Ccama', p_email: 'Hugo.Salas@Example.com', p_institucion: 'UNJBG', p_confirmar: false, p_dia: 1 });
   assert.equal(r.estado, 'nuevo');
   const p = (await q("select * from participantes where email = 'hugo.salas@example.com'"))[0];
   assert.equal(p.origen, 'presencial');
@@ -185,22 +185,22 @@ await prueba('7. Registro presencial: crea participante + QR + asistencia en una
   assert.equal(p.correo_estado, 'pendiente', 'no depende del correo para acreditar');
   const a = (await q('select a.*, o.email from asistencias a join operadores o on o.id = a.operador_id where participante_id = $1', [p.id]))[0];
   assert.deepEqual([a.metodo, a.email], ['presencial', 'laptop@innomining.test']);
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + p.qr_token })).estado, 'ya', 'no necesita pasar por el escáner');
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: 'IM26:' + p.qr_token, p_dia: 1 })).estado, 'ya', 'no necesita pasar por el escáner');
 });
 
 await prueba('7. Correo ya inscrito: no duplica; pide confirmar; luego registra; luego "ya registrado"', async () => {
-  const a = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: false });
+  const a = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: false, p_dia: 1 });
   assert.deepEqual([a.estado, a.nombre], ['existe', 'Valeria Ccori Apaza']);
   assert.equal((await q("select count(*)::int n from asistencias a join participantes p on p.id=a.participante_id where p.email='valeria.ccori@example.com'"))[0].n, 0);
-  const b = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: true });
+  const b = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: true, p_dia: 1 });
   assert.equal(b.estado, 'ok');
-  const c = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: true });
+  const c = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Valeria C.', p_email: 'valeria.ccori@example.com', p_institucion: '', p_confirmar: true, p_dia: 1 });
   assert.equal(c.estado, 'ya');
   assert.equal((await q("select count(*)::int n from participantes where email='valeria.ccori@example.com'"))[0].n, 1);
 });
 
 await prueba('7. Dos puestos registran a la misma persona nueva a la vez → 1 participante, 1 asistencia', async () => {
-  const d = { p_nombre: 'Iván Torres', p_email: 'ivan.torres@example.com', p_institucion: 'UNI', p_confirmar: true };
+  const d = { p_nombre: 'Iván Torres', p_email: 'ivan.torres@example.com', p_institucion: 'UNI', p_confirmar: true, p_dia: 1 };
   const rs = await Promise.all([S.llamar(laptop, 'registrar_presencial', d), S.llamar(celular, 'registrar_presencial', d), S.llamar(admin, 'registrar_presencial', d)]);
   assert.deepEqual(rs.map((r) => r.estado).sort(), ['nuevo', 'ya', 'ya']);
   assert.equal((await q("select count(*)::int n from participantes where email='ivan.torres@example.com'"))[0].n, 1);
@@ -208,17 +208,17 @@ await prueba('7. Dos puestos registran a la misma persona nueva a la vez → 1 p
 });
 
 await prueba('7. Validaciones del registro presencial', async () => {
-  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: '', p_email: 'x@example.com', p_institucion: '', p_confirmar: false }), /obligatorio/);
-  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: 'X', p_email: 'x@ex', p_institucion: '', p_confirmar: false }), /no válido/);
+  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: '', p_email: 'x@example.com', p_institucion: '', p_confirmar: false, p_dia: 1 }), /obligatorio/);
+  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: 'X', p_email: 'x@ex', p_institucion: '', p_confirmar: false, p_dia: 1 }), /no válido/);
 });
 
 await prueba('Situación C: búsqueda (correo enmascarado para operador) y registro de ingreso', async () => {
-  const r = await S.llamar(laptop, 'buscar_participantes', { p_q: 'maria jose' });
+  const r = await S.llamar(laptop, 'buscar_participantes', { p_q: 'maria jose', p_dia: 1 });
   assert.equal(r.length, 1);
   assert.match(r[0].email, /^mj•••@example\.com$/);
-  assert.equal((await S.llamar(laptop, 'registrar_ingreso_id', { p_id: r[0].id })).estado, 'ok');
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_id', { p_id: r[0].id })).estado, 'ya');
-  assert.equal((await A('buscar_participantes', { p_q: 'maria jose' }))[0].email, 'mj.torres@example.com', 'admin ve el correo completo');
+  assert.equal((await S.llamar(laptop, 'registrar_ingreso_id', { p_id: r[0].id, p_dia: 1 })).estado, 'ok');
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_id', { p_id: r[0].id, p_dia: 1 })).estado, 'ya');
+  assert.equal((await A('buscar_participantes', { p_q: 'maria jose', p_dia: 1 }))[0].email, 'mj.torres@example.com', 'admin ve el correo completo');
 });
 
 await prueba('Operador corrige solo lo que registró presencialmente; el QR no cambia', async () => {
@@ -232,22 +232,23 @@ await prueba('Operador corrige solo lo que registró presencialmente; el QR no c
 });
 
 // ===================================================================== 12 Fechas
-await prueba('12. Asistencia independiente por fecha; mismo QR en días distintos', async () => {
-  await A('guardar_configuracion', { p_fechas: ['2026-11-18', '2026-11-19', '2026-11-20'], p_permitir_fuera_de_fecha: false, p_limite: 300 });
+await prueba('12. Asistencia independiente por DÍA (1, 2, 3) con el mismo QR; día inválido rechazado', async () => {
   const t = await tok('carlos.mamani@example.com');
-  await fijarFecha('2026-11-18');
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t })).estado, 'ok');
-  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t })).estado, 'ya');
-  await fijarFecha('2026-11-19');
-  const d2 = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t });
-  assert.deepEqual([d2.estado, d2.fecha], ['ok', '19/11/2026']);
-  const fechas = await q("select to_char(fecha,'YYYY-MM-DD') f from asistencias a join participantes p on p.id=a.participante_id where p.email='carlos.mamani@example.com' order by fecha");
-  assert.deepEqual(fechas.map((x) => x.f), ['2026-11-18', '2026-11-19']);
-  await fijarFecha('2026-11-25');
-  await rechaza(S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t }), /no es una fecha configurada/);
-  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Z', p_email: 'z@example.com', p_institucion: '', p_confirmar: false }), /no es una fecha configurada/);
-  await A('guardar_configuracion', { p_fechas: ['2026-11-18', '2026-11-19', '2026-11-20'], p_permitir_fuera_de_fecha: true, p_limite: 300 });
-  await fechaReal();
+  const d1 = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t, p_dia: 1 });
+  assert.equal(d1.estado, 'ok');
+  assert.equal((await S.llamar(laptop, 'registrar_ingreso_qr', { p_qr: t, p_dia: 1 })).estado, 'ya');
+  const d2 = await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t, p_dia: 2 });
+  assert.deepEqual([d2.estado, d2.dia], ['ok', 2]);
+  assert.equal((await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t, p_dia: 2 })).estado, 'ya');
+  const dias = await q("select dia from asistencias a join participantes p on p.id=a.participante_id where p.email='carlos.mamani@example.com' order by dia");
+  assert.deepEqual(dias.map((x) => x.dia), [1, 2]);
+  await rechaza(S.llamar(celular, 'registrar_ingreso_qr', { p_qr: t, p_dia: 4 }), /Elija el día/);
+  await rechaza(S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Z', p_email: 'z@example.com', p_institucion: '', p_confirmar: false, p_dia: 0 }), /Elija el día/);
+  const n = await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Día Tres', p_email: 'dia.tres@example.com', p_institucion: '', p_confirmar: false, p_dia: 3 });
+  assert.deepEqual([n.estado, n.dia], ['nuevo', 3]);
+  const lista = await A('listar_participantes');
+  assert.deepEqual(Object.keys(lista.find((p) => p.email === 'carlos.mamani@example.com').ingreso_dias).sort(), ['1', '2']);
+  assert.equal((await S.llamar(laptop, 'buscar_participantes', { p_q: 'carlos', p_dia: 3 }))[0].ingreso_dia, null);
 });
 
 // ===================================================================== 6 / 13 / 14 Correo
@@ -256,6 +257,8 @@ await prueba('6. Estado de Brevo: detecta clave faltante; con clave valida cuent
   assert.ok(r.data.problemas.some((x) => /clave de Brevo/.test(x)));
   // Configuración desde el panel: clave en formato "MCP" (también aceptado), guardada en Vault.
   await rechaza(S.llamar(laptop, 'guardar_brevo', { p_clave: 'x', p_remitente: '', p_nombre: '' }), /administrador/);
+  const ev = await A('guardar_info_evento', { p_fecha: '18, 19 y 20 de noviembre', p_lugar: 'Auditorio UNSA' });
+  assert.equal(ev.evento_lugar, 'Auditorio UNSA');
   const eb = await A('guardar_brevo', { p_clave: Buffer.from(JSON.stringify({ api_key: brevo.clave })).toString('base64'), p_remitente: brevo.remitente, p_nombre: 'INNOMINING 2026' });
   assert.equal(eb.clave_configurada, true);
   assert.ok(!JSON.stringify(eb).includes(brevo.clave), 'la clave nunca vuelve al navegador');
@@ -285,7 +288,8 @@ await prueba('6. Envío masivo por lotes a pendientes: aceptados / fallidos, QR 
   assert.equal(new Set(brevo.st.enviados.map((e) => e.to)).size, brevo.st.enviados.length, 'sin duplicados');
   const m = brevo.st.enviados.find((e) => e.to === 'ana.perez@example.com');
   const t = (await q("select qr_token from participantes where email = 'ana.perez@example.com'"))[0].qr_token;
-  assert.ok(m.html.includes(`/functions/v1/qr?t=${t}`) && m.html.includes('Ana Lucía Pérez Quispe'));
+  assert.ok(m.html.includes(`/functions/v1/qr?t=${t}`) && m.html.includes('Estimado(a) Ana Lucía Pérez Quispe:'));
+  assert.ok(m.html.includes('Auditorio UNSA') && m.html.includes('18, 19 y 20 de noviembre'), 'fecha y lugar en el correo');
   assert.equal(Buffer.from(m.adjuntos[0].content, 'base64').subarray(1, 4).toString(), 'PNG');
   const est = await q('select correo_estado, count(*)::int n from participantes group by 1 order by 1');
   assert.deepEqual(est.map((x) => x.correo_estado), ['aceptado', 'fallido']);
@@ -311,7 +315,7 @@ await prueba('6. Reintento de fallidos tras corregir el correo', async () => {
 });
 
 await prueba('13. Envío posterior a presenciales: mismo QR que ya tenían; no se generan nuevos', async () => {
-  await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Nora Vilca', p_email: 'nora.vilca@example.com', p_institucion: 'UNSA', p_confirmar: false });
+  await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Nora Vilca', p_email: 'nora.vilca@example.com', p_institucion: 'UNSA', p_confirmar: false, p_dia: 1 });
   const p = (await q("select * from participantes where email = 'nora.vilca@example.com'"))[0];
   assert.equal(p.correo_estado, 'pendiente');
   const r = (await S.funcion(admin, 'enviar-qr', { accion: 'enviar', modo: 'pendientes' })).data;
@@ -409,24 +413,23 @@ await prueba('9. Persistencia: los datos siguen ahí tras reiniciar el servidor 
   const S2 = await iniciar({ database: 'im26_db_test', env });
   const t2 = await S2.login('admin@innomining.test', 'Admin-2026!');
   const r = await S2.llamar(t2, 'resumen');
-  assert.ok(r.total >= 15 && r.ingresos_hoy >= 5);
+  assert.ok(r.total >= 15 && r.ingresos_dia[0] >= 5);
   await S2.cerrar();
 });
 
 await prueba('10. Sincronización: lo que registra un puesto lo ve el otro y el panel al instante', async () => {
-  const antes = (await S.llamar(celular, 'ultimos_ingresos')).ingresos_hoy;
-  await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Rubén Ccama', p_email: 'ruben.ccama@example.com', p_institucion: '', p_confirmar: false });
-  const r = await S.llamar(celular, 'ultimos_ingresos');
-  assert.equal(r.ingresos_hoy, antes + 1);
+  const antes = (await S.llamar(celular, 'ultimos_ingresos', { p_dia: 1 })).ingresos;
+  await S.llamar(laptop, 'registrar_presencial', { p_nombre: 'Rubén Ccama', p_email: 'ruben.ccama@example.com', p_institucion: '', p_confirmar: false, p_dia: 1 });
+  const r = await S.llamar(celular, 'ultimos_ingresos', { p_dia: 1 });
+  assert.equal(r.ingresos, antes + 1);
   assert.equal(r.ultimos[0].nombre, 'Rubén Ccama');
-  assert.equal((await A('resumen')).ingresos_hoy, antes + 1);
+  assert.equal((await A('resumen')).ingresos_dia[0], antes + 1);
 });
 
 await prueba('15. Exportación: id, nombre, correo normalizado, origen y asistencias por fecha', async () => {
   const x = await A('exportar_registros');
   const c = x.filas.find((f) => f.email === 'carlos.mamani@example.com');
-  assert.ok(c.id && c.asistencias['18/11/2026'] && c.asistencias['19/11/2026']);
-  assert.ok(x.fechas.includes('18/11/2026') && x.fechas.includes('20/11/2026'));
+  assert.ok(c.id && c.asistencias.dia1 && c.asistencias.dia2 && !c.asistencias.dia3);
   assert.ok(x.filas.some((f) => f.origen === 'Registro presencial'));
 });
 
@@ -435,7 +438,7 @@ await prueba('Panel: indicadores coherentes con la base', async () => {
   const t = (await q('select count(*)::int n from participantes'))[0].n;
   assert.equal(r.total, t);
   assert.equal(r.previos + r.presenciales, t);
-  assert.equal(r.ingresos_hoy + r.sin_ingreso_hoy, t);
+  assert.equal(r.ingresos_dia.length, 3);
 });
 
 await prueba('Eliminar: bloqueado si tiene asistencias', async () => {

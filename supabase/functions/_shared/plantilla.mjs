@@ -10,13 +10,25 @@ function esc(s) {
 const F = "font-family:Arial,Helvetica,sans-serif;";
 const p = (t) => `<p style="margin:0 0 14px;">${t}</p>`;
 
+function saludo(nombre) {
+  return nombre ? `Estimado(a) ${esc(nombre)}:` : 'Estimado(a) participante:';
+}
+
+function bloqueEvento(d) {
+  if (!d.fecha && !d.lugar) return '';
+  const fila = (k, v) => v ? `<tr><td style="padding:3px 14px 3px 0;color:#6b6b76;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:3px 0;color:#16161d;font-weight:bold;">${esc(v)}</td></tr>` : '';
+  return `<tr><td style="padding:0 32px 18px;"><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f6f6fb;border-radius:10px;">
+    <tr><td style="padding:14px 18px;${F}font-size:14px;line-height:20px;"><table role="presentation" cellpadding="0" cellspacing="0">${fila('Fecha', d.fecha)}${fila('Lugar', d.lugar)}</table></td></tr></table></td></tr>`;
+}
+
 /**
- * @param {{nombre:string, codigo:string, imgSrc:string}} d  imgSrc: URL pública del PNG (o data: en la vista previa)
+ * @param {{nombre:string, codigo:string, imgSrc:string, fecha?:string, lugar?:string}} d  imgSrc: URL pública del PNG (o data: en la vista previa)
  */
 export function correoHtml(d) {
   const nombre = esc(d.nombre || 'Participante');
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(ASUNTO)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f6;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Tu código QR personal para ingresar al Congreso INNOMINING 2026. Guárdalo en tu celular.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f6;padding:28px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e6e6eb;border-radius:12px;">
   <tr><td style="padding:26px 32px 0;${F}">
@@ -24,10 +36,11 @@ export function correoHtml(d) {
     <div style="font-size:24px;line-height:30px;font-weight:bold;color:#16161d;margin-top:2px;">INNOMINING 2026</div>
   </td></tr>
   <tr><td style="padding:20px 32px 6px;${F}font-size:15px;line-height:23px;color:#2a2a33;">
-    ${p('Estimado(a) participante:')}
+    ${p(saludo(d.nombre))}
     ${p('Gracias por registrarte en el Congreso INNOMINING 2026.')}
     ${p('Te compartimos tu código QR personal, el cual deberás presentar al momento de ingresar al evento para registrar tu asistencia.')}
   </td></tr>
+  ${bloqueEvento(d)}
   <tr><td align="center" style="padding:6px 32px 22px;">
     <table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #e6e6eb;border-radius:10px;">
       <tr><td align="center" style="padding:18px 22px 8px;"><img src="${esc(d.imgSrc)}" width="220" height="220" alt="Código QR de acreditación" style="display:block;width:220px;height:220px;border:0;"></td></tr>
@@ -51,7 +64,7 @@ export function correoHtml(d) {
 }
 
 export function correoTexto(d) {
-  return `Estimado(a) participante:
+  return `${d.nombre ? `Estimado(a) ${d.nombre}:` : 'Estimado(a) participante:'}
 
 Gracias por registrarte en el Congreso INNOMINING 2026.
 
@@ -62,7 +75,7 @@ Puedes guardar el código en tu celular. No será necesario imprimirlo.
 Este QR estará asociado a tu registro durante el congreso.
 
 Participante: ${d.nombre || ''}
-Código: ${d.codigo}
+Código: ${d.codigo}${d.fecha ? `\nFecha: ${d.fecha}` : ''}${d.lugar ? `\nLugar: ${d.lugar}` : ''}
 
 Atentamente,
 Comité Organizador

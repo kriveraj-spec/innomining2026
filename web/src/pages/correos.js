@@ -131,7 +131,7 @@ export async function vistaPrevia(id) {
   const b = modal('Vista previa del correo', `<p class="small"><span class="muted">Para:</span> ${h(d.email)}<br><span class="muted">Asunto:</span> <b>${h(ASUNTO)}</b></p>
     <iframe class="mail-frame" sandbox title="Vista previa" style="margin-top:12px"></iframe>
     <p class="small muted" style="margin-top:8px">El correo real incluye además el QR como archivo PNG adjunto.</p>`, { wide: true });
-  $('iframe', b).srcdoc = correoHtml({ nombre: d.nombre, codigo: d.codigo, imgSrc: qrDataUrl(d.qr_token) });
+  $('iframe', b).srcdoc = correoHtml({ nombre: d.nombre, codigo: d.codigo, imgSrc: qrDataUrl(d.qr_token), fecha: d.evento_fecha, lugar: d.evento_lugar });
 }
 
 async function verificarIncierto(e) {

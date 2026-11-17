@@ -3,9 +3,10 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 import './style.css';
-import { sb, rpc, $, $$, h, toast, hayModal, configurado } from './lib/core.js';
+import { sb, rpc, $, $$, h, toast, hayModal, configurado, getDia } from './lib/core.js';
 import * as inicio from './pages/inicio.js';
 import * as resumen from './pages/resumen.js';
+import * as asistencia from './pages/asistencia.js';
 import * as registro from './pages/registro.js';
 import * as escaner from './pages/escaner.js';
 import * as participantes from './pages/participantes.js';
@@ -15,6 +16,7 @@ import * as configuracion from './pages/configuracion.js';
 const I = {
   inicio: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   resumen: '<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>',
+  asistencia: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/>',
   registro: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
   escaner: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>',
   participantes: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -31,7 +33,8 @@ const RUTAS = {
   resumen: { mod: resumen, titulo: 'Resumen', admin: true },
   registro: { mod: registro, titulo: 'Registro presencial' },
   escaner: { mod: escaner, titulo: 'Escáner', completa: true },
-  participantes: { mod: participantes, titulo: 'Participantes', admin: true },
+  participantes: { mod: participantes, titulo: 'Inscritos', admin: true },
+  asistencia: { mod: asistencia, titulo: 'Asistencia', admin: true },
   correos: { mod: correos, titulo: 'Correos', admin: true },
   configuracion: { mod: configuracion, titulo: 'Configuración', admin: true }
 };
@@ -87,14 +90,15 @@ function shell(ruta) {
   app.innerHTML = `<div class="shell">
     <aside class="side" id="side">
       <div class="brand">INNOMINING <span>2026</span></div>
-      <a class="nav" href="#/inicio" style="color:var(--muted);font-size:14px">← Cambiar a Puerta / Organizador</a>
+      <div style="padding:0 10px 10px"><span class="chip acc" style="font-size:14px;padding:4px 12px">Día ${getDia()}</span></div>
+      <a class="nav" href="#/inicio" style="color:var(--muted);font-size:14px">← Cambiar día o modo</a>
       <div class="label">Ingreso al evento</div>
       ${item('registro')}${item('escaner')}
-      ${admin ? `<div class="label">Administración</div>${item('resumen')}${item('participantes')}${item('correos')}${item('configuracion')}` : ''}
+      ${admin ? `<div class="label">Administración</div>${item('resumen')}${item('participantes')}${item('asistencia')}${item('correos')}${item('configuracion')}` : ''}
       <div class="who"><b>${h(ctx.perfil.nombre)}</b><span class="small muted">Datos sincronizados entre todos los dispositivos</span></div>
     </aside>
     <div>
-      <div class="topbar"><button class="btn ghost sm" id="menu" aria-label="Menú">${icono('menu').replace('<svg', '<svg width="20" height="20"')}</button><b>${RUTAS[ruta].titulo}</b><span style="width:40px"></span></div>
+      <div class="topbar"><button class="btn ghost sm" id="menu" aria-label="Menú">${icono('menu').replace('<svg', '<svg width="20" height="20"')}</button><b>${RUTAS[ruta].titulo}</b><span class="chip acc">Día ${getDia()}</span></div>
       <main class="page" id="main"></main>
     </div>
   </div>`;
@@ -108,6 +112,7 @@ function navegar() {
   if (actual && actual.salir) actual.salir();
   let ruta = (location.hash.match(/^#\/([a-z]+)/) || [])[1] || 'inicio';
   if (!RUTAS[ruta] || (RUTAS[ruta].admin && ctx.perfil.rol !== 'admin')) ruta = 'inicio';
+  if (ruta !== 'inicio' && !getDia()) ruta = 'inicio'; // primero se elige el día
   const r = RUTAS[ruta];
   actual = r.mod;
   document.title = `${r.titulo} · INNOMINING 2026`;
