@@ -14,9 +14,12 @@ export async function render(r, c) {
 export async function refrescar(silencioso) {
   try {
     const s = await rpc('resumen');
+    let sd = [0, 0, 0];
+    try { sd = (await rpc('resumen_salidas')).salidas_dia; } catch (_) { /* aún sin actualizar la base */ }
     const st = [
       ['Participantes', s.total], ['Inscritos previamente', s.previos], ['Registrados en puerta', s.presenciales],
       ['Ingresos Día 1', s.ingresos_dia[0]], ['Ingresos Día 2', s.ingresos_dia[1]], ['Ingresos Día 3', s.ingresos_dia[2]],
+      ['Salidas Día 1', sd[0]], ['Salidas Día 2', sd[1]], ['Salidas Día 3', sd[2]],
       ['Aún sin ningún ingreso', s.nunca_ingresaron], ['QR generados', s.qr_generados],
       ['Correos aceptados por Brevo', s.correo_aceptado], ['Correos pendientes', s.correo_pendiente], ['Correos fallidos', s.correo_fallido + s.correo_incierto]
     ];

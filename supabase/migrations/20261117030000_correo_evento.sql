@@ -17,7 +17,7 @@ create or replace function public.guardar_info_evento(p_fecha text, p_lugar text
 language plpgsql security definer set search_path = public as $$
 begin
   perform public._admin();
-  update configuracion set evento_fecha_texto = public._limpiar(p_fecha), evento_lugar = public._limpiar(p_lugar), actualizado_en = now();
+  update configuracion set evento_fecha_texto = public._limpiar(p_fecha), evento_lugar = public._limpiar(p_lugar), actualizado_en = now() where id;
   return public.estado_brevo();
 end $$;
 

@@ -477,6 +477,45 @@ await prueba('Panel: indicadores coherentes con la base', async () => {
   assert.equal(r.ingresos_dia.length, 3);
 });
 
+await prueba('Salida: registra la 2.ª toma, separada de la entrada, y no duplica', async () => {
+  const t = await tok('ana.perez@example.com');
+  const r = await S.llamar(celular, 'registrar_salida_qr', { p_qr: t, p_dia: 1 });
+  assert.equal(r.estado, 'ok');
+  assert.equal(r.entrada, anaHora);
+  const r2 = await S.llamar(laptop, 'registrar_salida_qr', { p_qr: t, p_dia: 1 });
+  assert.deepEqual([r2.estado, r2.hora], ['ya', r.hora]);
+  assert.equal((await q("select count(*)::int n from asistencias a join participantes p on p.id=a.participante_id where p.email='ana.perez@example.com' and a.dia=1"))[0].n, 1, 'la entrada no cambia');
+  const ls = await A('listar_asistencia', { p_dia: 1 });
+  const fila = ls.filas.find((f) => f.nombre === 'Ana Lucía Pérez Quispe');
+  assert.deepEqual([fila.hora, fila.salida], [anaHora, r.hora]);
+});
+
+await prueba('Salida sin entrada previa: se registra y aparece en asistencia con entrada vacía', async () => {
+  const t = await tok('mj.torres@example.com');
+  const r = await S.llamar(celular, 'registrar_salida_qr', { p_qr: t, p_dia: 2 });
+  assert.equal(r.estado, 'ok');
+  assert.equal(r.entrada, null);
+  const fila = (await A('listar_asistencia', { p_dia: 2 })).filas.find((f) => f.codigo === r.codigo);
+  assert.ok(fila && fila.hora === null && fila.salida === r.hora);
+  assert.equal((await S.llamar(celular, 'registrar_salida_qr', { p_qr: 'hola', p_dia: 2 })).estado, 'invalido');
+});
+
+await prueba('Salida: 20 lecturas simultáneas → 1 sola; manual por id; export y resumen la incluyen', async () => {
+  const t = await tok('lucia.fernandez@example.com');
+  const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => S.llamar(i % 2 ? celular : laptop, 'registrar_salida_qr', { p_qr: t, p_dia: 1 })));
+  assert.equal(rs.filter((r) => r.estado === 'ok').length, 1);
+  const carlos = (await q("select id from participantes where email='carlos.mamani@example.com'"))[0].id;
+  assert.equal((await S.llamar(laptop, 'registrar_salida_id', { p_id: carlos, p_dia: 1 })).estado, 'ok');
+  assert.equal((await S.llamar(laptop, 'registrar_salida_id', { p_id: carlos, p_dia: 1 })).estado, 'ya');
+  const b = await S.llamar(laptop, 'buscar_participantes', { p_q: 'carlos', p_dia: 1 });
+  assert.ok(b[0].salida_dia);
+  const x = await A('exportar_registros');
+  assert.ok(x.filas.find((f) => f.email === 'ana.perez@example.com').salidas.dia1);
+  assert.deepEqual((await A('resumen_salidas')).salidas_dia, [3, 1, 0]);
+  assert.equal((await S.llamar(celular, 'ultimas_salidas', { p_dia: 1 })).salidas, 3);
+  await rechaza(S.llamar(null, 'registrar_salida_qr', { p_qr: t, p_dia: 1 }));
+});
+
 await prueba('Eliminar: bloqueado si tiene asistencias', async () => {
   const ana = (await q("select id from participantes where email='ana.perez@example.com'"))[0].id;
   await rechaza(A('eliminar_participante', { p_id: ana }), /asistencias/);

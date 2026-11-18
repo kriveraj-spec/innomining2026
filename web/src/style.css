@@ -202,3 +202,12 @@ dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; }
   .hide-m { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.scan-top .modo-tag { font-size: 13px; font-weight: 700; letter-spacing: .12em; padding: 3px 10px; border-radius: 999px; background: #0f7a4d; color: #fff; }
+.scan-page.salida { background: #1a1030; }
+.scan-page.salida .modo-tag { background: #c2410c; }
+.scan-page.salida .frame { border-color: #fb923c !important; }
+.scan-bottom { flex-wrap: wrap; }
+.mode.salida { border-color: #fdba74; }
+.mode.salida h2 { color: #c2410c; }
+@media (min-width: 861px) { .modes:has(.mode.salida) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

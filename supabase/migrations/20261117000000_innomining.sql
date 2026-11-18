@@ -581,7 +581,7 @@ returns json language plpgsql security definer set search_path = public as $$
 begin
   perform public._admin();
   update configuracion set fechas_evento = (select coalesce(array_agg(distinct f order by f), '{}') from unnest(p_fechas) f),
-         permitir_fuera_de_fecha = p_permitir_fuera_de_fecha, limite_diario_correos = p_limite, actualizado_en = now();
+         permitir_fuera_de_fecha = p_permitir_fuera_de_fecha, limite_diario_correos = p_limite, actualizado_en = now() where id;
   perform public._log('configuracion', json_build_object('fechas', p_fechas, 'fuera', p_permitir_fuera_de_fecha, 'limite', p_limite)::jsonb);
   return public.obtener_configuracion();
 end $$;

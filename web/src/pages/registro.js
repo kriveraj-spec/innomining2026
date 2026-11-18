@@ -121,12 +121,24 @@ async function buscar(q) {
   try {
     const rs = await rpc('buscar_participantes', { p_q: q, p_dia: getDia() });
     ul.innerHTML = rs.length ? rs.map((x) => `<li><div><div>${h(x.nombre)}</div><div class="small muted">${h(x.codigo)} · ${h(x.email)}${x.institucion ? ' · ' + h(x.institucion) : ''}</div></div>
-      ${x.ingreso_dia ? `<span class="chip ok">Ingresó ${h(x.ingreso_dia.slice(0, 5))}</span>` : `<button class="btn sm primary" data-id="${h(x.id)}">Registrar ingreso</button>`}</li>`).join('')
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${x.ingreso_dia ? `<span class="chip ok">Ingresó ${h(x.ingreso_dia.slice(0, 5))}</span>` : `<button class="btn sm primary" data-id="${h(x.id)}">Registrar ingreso</button>`}
+      ${x.salida_dia ? `<span class="chip">Salió ${h(x.salida_dia.slice(0, 5))}</span>` : `<button class="btn sm" data-sal="${h(x.id)}">Marcar salida</button>`}</div></li>`).join('')
       : '<li class="muted small">Sin resultados. Si no está inscrito, regístrelo con el formulario.</li>';
   } catch (e) { ul.innerHTML = `<li class="error">${h(e.message)}</li>`; }
 }
 
 async function ingresoPorId(e) {
+  const bs = e.target.closest('[data-sal]');
+  if (bs) {
+    bs.disabled = true; bs.textContent = 'Registrando…';
+    try {
+      const r = await rpc('registrar_salida_id', { p_id: bs.dataset.sal, p_dia: getDia() });
+      if (r.estado === 'ok') mostrar('ok', '✓ SALIDA REGISTRADA', r.nombre, `Día ${r.dia} · ${h(r.codigo)} · ${h(r.hora)}${r.entrada ? '' : '<br>No tenía entrada registrada hoy.'}`);
+      else mostrar('ya', `SALIDA YA REGISTRADA EN EL DÍA ${r.dia}`, r.nombre, `Salió a las <b>${h(r.hora)}</b>.`);
+      buscar($('#q', root).value.trim());
+    } catch (err) { toast(err.message, true); bs.disabled = false; bs.textContent = 'Marcar salida'; }
+    return;
+  }
   const b = e.target.closest('[data-id]'); if (!b) return;
   b.disabled = true; b.textContent = 'Registrando…';
   try {

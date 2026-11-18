@@ -1,5 +1,5 @@
 // Pantalla inicial: 1) elegir Día 1, 2 o 3; 2) elegir Organizador o Puerta.
-import { rpc, $, getDia, setDia } from '../lib/core.js';
+import { rpc, $, getDia, setDia, setModo } from '../lib/core.js';
 
 let root, ctx, paso = 'dia';
 
@@ -27,11 +27,14 @@ function pintar() {
     <div class="modes">
       <a class="mode" href="#/registro">${ctx.icono('laptop')}<h2>Organizador</h2>
         <p>Laptop. Registrar a quienes llegan sin inscripción o sin su QR, ver participantes, enviar los QR y exportar.</p></a>
-      <a class="mode" href="#/escaner">${ctx.icono('celular')}<h2>Puerta</h2>
-        <p>Celular. Escanear los QR de los participantes en la entrada.</p></a>
+      <a class="mode" href="#/escaner" data-modo="entrada">${ctx.icono('celular')}<h2>Puerta · Entrada</h2>
+        <p>Celular. Escanear los QR cuando los participantes llegan.</p></a>
+      <a class="mode salida" href="#/escaner" data-modo="salida">${ctx.icono('celular')}<h2>Puerta · Salida</h2>
+        <p>Celular. Al final del día (desde las 12:00 aprox.), volver a escanear los QR para la segunda toma de asistencia.</p></a>
     </div>
   </div></div>`;
   $('#cambiar', root).onclick = () => { paso = 'dia'; pintar(); };
+  root.querySelectorAll('[data-modo]').forEach((a) => (a.onclick = () => setModo(a.dataset.modo)));
   refrescar();
 }
 

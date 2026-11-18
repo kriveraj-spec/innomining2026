@@ -192,7 +192,7 @@ await paso('Laptop: entra con el mismo link y elige Organizador', async () => { 
 await paso('8. Celular: modo escáner abre la cámara y registra el ingreso del QR', async () => {
   await entrar(cel);
   await cel.screenshot({ path: path.join(SHOTS, '09-celular-inicio.png') });
-  await cel.click('.mode[href="#/escaner"]');
+  await cel.click('.mode[data-modo="entrada"]');
   await cel.waitForSelector('#res.ok', { timeout: 20000 });
   const t = await cel.textContent('#res');
   assert.match(t, /INGRESO REGISTRADO/); assert.match(t, /Ana Lucía Pérez Quispe/);
@@ -274,11 +274,11 @@ await paso('Inscritos (pestañas Preinscritos / En puerta) y Asistencia por día
   await adm.screenshot({ path: path.join(SHOTS, '05b-inscritos.png') });
   await adm.click('#grupos [data-g="todos"]');
   await adm.click('.nav[href="#/asistencia"]');
-  await adm.waitForFunction(() => /Ingresaron el Día 1/.test(document.querySelector('#st')?.textContent || ''));
+  await adm.waitForFunction(() => /Entradas Día 1/.test(document.querySelector('#st')?.textContent || ''));
   const n1 = await adm.$$eval('#tb tr', (r) => r.length);
   assert.equal(n1, 5);
   await adm.click('#tabs [data-d="2"]');
-  await adm.waitForFunction(() => /Ingresaron el Día 2/.test(document.querySelector('#st').textContent));
+  await adm.waitForFunction(() => /Entradas Día 2/.test(document.querySelector('#st').textContent));
   await adm.click('#tabs [data-d="1"]');
   await adm.waitForSelector('#tb tr:has-text("En puerta")');
   await adm.screenshot({ path: path.join(SHOTS, '13b-asistencia.png') });
@@ -295,7 +295,7 @@ await paso('15. Exportar CSV con id, correo normalizado, origen y asistencia por
   const [dl] = await Promise.all([adm.waitForEvent('download'), adm.click('#b-csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   const lineas = csv.trim().split('\n');
-  assert.match(lineas[0], /^.?id,codigo,nombre,email,institucion,origen,qr,correo,ingreso_dia1,ingreso_dia2,ingreso_dia3$/);
+  assert.match(lineas[0], /^.?id,codigo,nombre,email,institucion,origen,qr,correo,ingreso_dia1,ingreso_dia2,ingreso_dia3,salida_dia1,salida_dia2,salida_dia3$/);
   assert.equal(lineas.length, 17);
   assert.ok(lineas.some((l) => l.includes('hugo.salas@example.com') && l.includes('Registro presencial')));
   fs.copyFileSync(await dl.path(), path.join(SHOTS, 'exportacion.csv'));
@@ -319,11 +319,36 @@ await paso('Día 2: el mismo QR registra un ingreso nuevo; Día 1 conserva el su
   await cel.goto(S.url + '/#/inicio');
   await cel.waitForSelector('.dias');
   await cel.click('[data-d="2"]');
-  await cel.click('.mode[href="#/escaner"]');
+  await cel.click('.mode[data-modo="entrada"]');
   await cel.waitForSelector('#res.ok', { timeout: 20000 });
   assert.match(await cel.textContent('#res'), /Día 2/);
   const dias = await q("select dia from asistencias a join participantes p on p.id=a.participante_id where p.email='ana.perez@example.com' order by dia");
   assert.deepEqual(dias.map((x) => x.dia), [1, 2]);
+});
+
+await paso('Salida (Día 2): modo Salida escanea el QR, registra la 2.ª toma y Asistencia muestra entrada y salida', async () => {
+  await cel.goto(S.url + '/#/inicio');
+  await cel.waitForSelector('.dias');
+  await cel.click('[data-d="2"]');
+  await cel.click('.mode[data-modo="salida"]');
+  await cel.waitForSelector('.scan-page.salida');
+  await cel.waitForSelector('#res.ok', { timeout: 20000 });
+  const t = await cel.textContent('#res');
+  assert.match(t, /SALIDA REGISTRADA/); assert.match(t, /Ana Lucía Pérez Quispe/); assert.match(t, /Entró/);
+  await cel.screenshot({ path: path.join(SHOTS, '14b-escaner-salida.png') });
+  await cel.waitForSelector('#res.ya', { timeout: 20000 });
+  assert.match(await cel.textContent('#res'), /SALIDA YA REGISTRADA/);
+  const sal = await q("select dia from salidas s join participantes p on p.id=s.participante_id where p.email='ana.perez@example.com'");
+  assert.deepEqual(sal.map((x) => x.dia), [2]);
+  assert.equal((await q("select count(*)::int n from asistencias a join participantes p on p.id=a.participante_id where p.email='ana.perez@example.com'"))[0].n, 2, 'la salida no crea entradas');
+  await lap.goto(S.url + '/#/asistencia');
+  await lap.click('#tabs [data-d="2"]');
+  await lap.waitForFunction(() => /Entradas Día 2/.test(document.querySelector('#st')?.textContent || '') && /Ana Lucía/.test(document.querySelector('#tb')?.textContent || ''));
+  const fila = await lap.textContent('#tb tr:has-text("Ana Lucía")');
+  assert.match(fila, /\d\d:\d\d:\d\d[\s\S]*\d\d:\d\d:\d\d/, 'muestra hora de entrada y de salida');
+  await lap.screenshot({ path: path.join(SHOTS, '14c-asistencia-salida.png') });
+  await cel.click('#modo');
+  await cel.waitForSelector('.scan-page:not(.salida)');
 });
 
 await paso('Celular: vista móvil sin desplazamiento horizontal', async () => {

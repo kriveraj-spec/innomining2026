@@ -1,24 +1,26 @@
 // Puesto celular: cámara + validación en el servidor.
-import { rpc, $, h, getDia } from '../lib/core.js';
+import { rpc, $, h, getDia, getModo, setModo } from '../lib/core.js';
 
 let root, jsQR = null;
 const S = { stream: null, facing: 'environment', ocupado: false, ultimo: '', ultimoEn: 0, timer: 0, ocultar: 0, cv: document.createElement('canvas'), wake: null };
 
 export async function render(r) {
   root = r;
-  root.innerHTML = `<div class="scan-page">
-    <div class="scan-top"><a href="#/inicio">← Salir</a><span class="count">Día ${getDia()} · <b id="n">–</b> ingresaron</span></div>
+  const sal = getModo() === 'salida';
+  root.innerHTML = `<div class="scan-page${sal ? ' salida' : ''}">
+    <div class="scan-top"><a href="#/inicio">← Salir</a><span class="modo-tag">${sal ? 'SALIDA' : 'ENTRADA'}</span><span class="count">Día ${getDia()} · <b id="n">–</b> ${sal ? 'salidas' : 'ingresaron'}</span></div>
     <div class="cam">
       <video id="v" playsinline muted></video>
       <div class="frame"></div>
       <div class="res" id="res" hidden></div>
       <div class="idle" id="idle"><button class="btn primary big" id="go" style="background:#fff;color:#16161d">Iniciar cámara</button><p id="msg"></p></div>
     </div>
-    <div class="scan-bottom"><button class="btn" id="sw">Cambiar cámara</button><button class="btn" id="stop">Pausar</button></div>
+    <div class="scan-bottom"><button class="btn" id="sw">Cambiar cámara</button><button class="btn" id="modo">Pasar a ${sal ? 'entrada' : 'salida'}</button><button class="btn" id="stop">Pausar</button></div>
   </div>`;
   $('#go', root).onclick = iniciar;
   $('#sw', root).onclick = () => { S.facing = S.facing === 'environment' ? 'user' : 'environment'; iniciar(); };
   $('#stop', root).onclick = detener;
+  $('#modo', root).onclick = () => { detener(); setModo(sal ? 'entrada' : 'salida'); S.ultimo = ''; render(root); };
   $('#res', root).onclick = () => { if (!$('#res', root).classList.contains('wait')) ocultar(); };
   refrescar();
   iniciar(); // intenta abrir la cámara directamente
@@ -28,7 +30,13 @@ export function salir() { detener(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') detener(); });
 
 export async function refrescar() {
-  try { const r = await rpc('ultimos_ingresos', { p_dia: getDia() }); const n = $('#n', root); if (n) n.textContent = r.ingresos; } catch (_) { /* reintento automático */ }
+  try {
+    if (getModo() === 'salida') {
+      const r = await rpc('ultimas_salidas', { p_dia: getDia() }); const n = $('#n', root); if (n) n.textContent = `${r.salidas}/${r.entradas}`;
+    } else {
+      const r = await rpc('ultimos_ingresos', { p_dia: getDia() }); const n = $('#n', root); if (n) n.textContent = r.ingresos;
+    }
+  } catch (_) { /* reintento automático */ }
 }
 
 async function iniciar() {
@@ -97,6 +105,7 @@ async function leido(texto) {
   S.ultimo = texto; S.ultimoEn = ahora; S.ocupado = true;
   mostrar('wait', '<div class="t1">VALIDANDO…</div>');
   try {
+    if (getModo() === 'salida') return await salida(texto);
     const r = await rpc('registrar_ingreso_qr', { p_qr: texto, p_dia: getDia() });
     if (r.estado === 'ok') {
       navigator.vibrate && navigator.vibrate(120);
@@ -112,5 +121,21 @@ async function leido(texto) {
   } catch (e) {
     S.ultimo = ''; // permite volver a leer el mismo código
     mostrar('bad', `<div class="t1">NO SE REGISTRÓ</div><div class="t3" style="margin-top:12px">${h(e.message)}</div><div class="t4">Toque y vuelva a escanear</div>`);
+  }
+}
+
+async function salida(texto) {
+  const r = await rpc('registrar_salida_qr', { p_qr: texto, p_dia: getDia() });
+  if (r.estado === 'ok') {
+    navigator.vibrate && navigator.vibrate(120);
+    const nota = r.entrada ? `Entró ${h(r.entrada.slice(0, 5))} · salió ${h(r.hora.slice(0, 5))}` : `Salida ${h(r.hora.slice(0, 5))} · <b>sin entrada registrada hoy</b>`;
+    mostrar('ok', `<div class="t1">✓ SALIDA REGISTRADA</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia} · ${nota}</div><div class="t4">Toque para continuar</div>`, 2500);
+    refrescar();
+  } else if (r.estado === 'ya') {
+    navigator.vibrate && navigator.vibrate([80, 60, 80]);
+    mostrar('ya', `<div class="t1">SALIDA YA REGISTRADA</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia}: salió a las ${h(r.hora)}</div><div class="t4">No se registró de nuevo · Toque para continuar</div>`, 4000);
+  } else {
+    navigator.vibrate && navigator.vibrate([200, 80, 200]);
+    mostrar('bad', `<div class="t1">⚠ QR NO VÁLIDO</div><div class="t3" style="margin-top:12px">${h(r.msg)}</div><div class="t4">No se registró la salida · Toque para continuar</div>`, 4500);
   }
 }

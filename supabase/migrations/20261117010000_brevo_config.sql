@@ -15,9 +15,9 @@ begin
     select id into v_id from vault.secrets where name = 'brevo_api_key';
     if v_id is null then perform vault.create_secret(v_clave, 'brevo_api_key', 'Clave API de Brevo (INNOMINING 2026)');
     else perform vault.update_secret(v_id, v_clave, 'brevo_api_key', 'Clave API de Brevo (INNOMINING 2026)'); end if;
-    update configuracion set brevo_clave_fin = right(v_clave, 4);
+    update configuracion set brevo_clave_fin = right(v_clave, 4) where id;
   end if;
-  update configuracion set brevo_remitente = v_rem, brevo_nombre = coalesce(nullif(public._limpiar(p_nombre), ''), 'INNOMINING 2026'), actualizado_en = now();
+  update configuracion set brevo_remitente = v_rem, brevo_nombre = coalesce(nullif(public._limpiar(p_nombre), ''), 'INNOMINING 2026'), actualizado_en = now() where id;
   perform public._log('config_brevo', json_build_object('remitente', v_rem, 'clave_nueva', v_clave <> '')::jsonb);
   return public.estado_brevo();
 end $$;

@@ -121,7 +121,7 @@ function detalle(p) {
           <dt>Institución</dt><dd>${h(p.institucion || '—')}</dd>
           <dt>Origen</dt><dd>${chipOrigen(p.origen)}</dd>
           <dt>Envío</dt><dd>${chipCorreo(p.correo_estado)}${p.correo_fecha ? ` <span class="small muted">${h(p.correo_fecha)}</span>` : ''}${p.correo_error ? `<div class="small" style="color:var(--bad);margin-top:4px">${h(p.correo_error)}</div>` : ''}</dd>
-          <dt>Asistencias</dt><dd>${p.asistencias.length ? p.asistencias.map((a) => `<b>Día ${a.dia}</b> · ${h(a.fecha)} ${h(a.hora)} <span class="small muted">(${h(a.metodo)})</span>`).join('<br>') : '<span class="muted">Sin ingresos</span>'}</dd>
+          <dt>Asistencias</dt><dd>${p.asistencias.length ? p.asistencias.map((a) => `<b>Día ${a.dia}</b> · ${h(a.fecha)} ${h(a.hora)} <span class="small muted">(${h(a.metodo)})</span>${a.salida ? ` · salida ${h(a.salida)}` : ''}`).join('<br>') : '<span class="muted">Sin ingresos</span>'}</dd>
         </dl>
       </div>
     </div>
@@ -229,9 +229,10 @@ function csv(v) {
 async function exportar() {
   try {
     const x = await rpc('exportar_registros');
-    const cols = ['id', 'codigo', 'nombre', 'email', 'institucion', 'origen', 'qr', 'correo', 'ingreso_dia1', 'ingreso_dia2', 'ingreso_dia3'];
+    const cols = ['id', 'codigo', 'nombre', 'email', 'institucion', 'origen', 'qr', 'correo', 'ingreso_dia1', 'ingreso_dia2', 'ingreso_dia3', 'salida_dia1', 'salida_dia2', 'salida_dia3'];
     const filas = x.filas.map((r) => [r.id, r.codigo, r.nombre, r.email, r.institucion, r.origen, r.qr, r.correo,
-      ...[1, 2, 3].map((d) => (r.asistencias && r.asistencias['dia' + d]) || '')].map(csv).join(','));
+      ...[1, 2, 3].map((d) => (r.asistencias && r.asistencias['dia' + d]) || ''),
+      ...[1, 2, 3].map((d) => (r.salidas && r.salidas['dia' + d]) || '')].map(csv).join(','));
     descargar(new Blob([String.fromCharCode(0xfeff) + [cols.join(','), ...filas].join('\n')], { type: 'text/csv;charset=utf-8' }), `innomining2026_registros_${hoyArchivo()}.csv`);
     toast(`Exportados ${x.filas.length} participantes`);
   } catch (e) { toast(e.message, true); }

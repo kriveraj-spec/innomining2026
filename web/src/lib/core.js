@@ -105,4 +105,6 @@ export function chipOrigen(o) { return o === 'presencial' ? '<span class="chip i
 
 // Día del congreso elegido en este dispositivo (1, 2 o 3).
 export function getDia() { try { const d = Number(localStorage.getItem('im26-dia')); return d >= 1 && d <= 3 ? d : null; } catch (_) { return null; } }
+export function getModo() { try { return localStorage.getItem('im26-modo') === 'salida' ? 'salida' : 'entrada'; } catch (_) { return 'entrada'; } }
+export function setModo(m) { try { localStorage.setItem('im26-modo', m === 'salida' ? 'salida' : 'entrada'); } catch (_) { /* sin almacenamiento */ } }
 export function setDia(d) { try { localStorage.setItem('im26-dia', String(d)); } catch (_) { /* sin almacenamiento */ } }
