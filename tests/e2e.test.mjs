@@ -347,6 +347,15 @@ await paso('Salida (Día 2): modo Salida escanea el QR, registra la 2.ª toma y 
   const fila = await lap.textContent('#tb tr:has-text("Ana Lucía")');
   assert.match(fila, /\d\d:\d\d:\d\d[\s\S]*\d\d:\d\d:\d\d/, 'muestra hora de entrada y de salida');
   await lap.screenshot({ path: path.join(SHOTS, '14c-asistencia-salida.png') });
+  // Sin QR: buscar por nombre y marcar salida
+  await cel.fill('#bq', 'Hugo Salas');
+  await cel.waitForSelector('#bres [data-sal]');
+  await cel.screenshot({ path: path.join(SHOTS, '14d-salida-busqueda.png'), fullPage: true });
+  await cel.click('#bres [data-sal]');
+  await cel.waitForFunction(() => /Hugo Salas/.test(document.querySelector('#res')?.textContent || ''));
+  assert.match(await cel.textContent('#res'), /SALIDA REGISTRADA/);
+  const hs = await q("select s.metodo from salidas s join participantes p on p.id=s.participante_id where p.email='hugo.salas@example.com' and s.dia=2");
+  assert.deepEqual(hs.map((x) => x.metodo), ['presencial']);
   await cel.click('#modo');
   await cel.waitForSelector('.scan-page:not(.salida)');
 });

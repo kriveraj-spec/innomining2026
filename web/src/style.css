@@ -211,3 +211,18 @@ dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; }
 .mode.salida { border-color: #fdba74; }
 .mode.salida h2 { color: #c2410c; }
 @media (min-width: 861px) { .modes:has(.mode.salida) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.scan-buscar { padding: 6px 16px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+.scan-buscar label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 8px; color: #fdba74; }
+.scan-buscar input { width: 100%; font: inherit; font-size: 17px; padding: 13px 14px; border-radius: 12px; border: 1px solid #4b3a6b; background: #261845; color: #fff; }
+.scan-buscar input::placeholder { color: #a99cc4; }
+.scan-buscar ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.scan-buscar li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #261845; border: 1px solid #3a2a5a; border-radius: 12px; padding: 10px 12px; }
+.scan-buscar li.nota { color: #c8c8d4; font-size: 14px; justify-content: flex-start; }
+.scan-buscar li.err { color: #fca5a5; }
+.scan-buscar .who { display: flex; flex-direction: column; min-width: 0; }
+.scan-buscar .who b { font-size: 16px; }
+.scan-buscar .who span { font-size: 13px; color: #c8c8d4; overflow-wrap: anywhere; }
+.scan-buscar .who .si { color: #6ee7b7; } .scan-buscar .who .no { color: #fcd34d; }
+.scan-buscar .btn { flex: none; background: #c2410c; border-color: #c2410c; color: #fff; }
+.scan-buscar .hecho { flex: none; font-size: 13px; color: #c8c8d4; }

@@ -16,10 +16,20 @@ export async function render(r) {
       <div class="idle" id="idle"><button class="btn primary big" id="go" style="background:#fff;color:#16161d">Iniciar cámara</button><p id="msg"></p></div>
     </div>
     <div class="scan-bottom"><button class="btn" id="sw">Cambiar cámara</button><button class="btn" id="modo">Pasar a ${sal ? 'entrada' : 'salida'}</button><button class="btn" id="stop">Pausar</button></div>
+    ${sal ? `<div class="scan-buscar">
+      <label for="bq">¿No tiene su QR? Búscalo por nombre</label>
+      <input id="bq" type="search" autocomplete="off" placeholder="Nombre, apellido, correo o código">
+      <ul id="bres"></ul>
+    </div>` : ''}
   </div>`;
   $('#go', root).onclick = iniciar;
   $('#sw', root).onclick = () => { S.facing = S.facing === 'environment' ? 'user' : 'environment'; iniciar(); };
   $('#stop', root).onclick = detener;
+  if (sal) {
+    let t = 0;
+    $('#bq', root).addEventListener('input', (e) => { clearTimeout(t); const v = e.target.value.trim(); t = setTimeout(() => buscarSalida(v), 300); });
+    $('#bres', root).addEventListener('click', marcarSalida);
+  }
   $('#modo', root).onclick = () => { detener(); setModo(sal ? 'entrada' : 'salida'); S.ultimo = ''; render(root); };
   $('#res', root).onclick = () => { if (!$('#res', root).classList.contains('wait')) ocultar(); };
   refrescar();
@@ -138,4 +148,40 @@ async function salida(texto) {
     navigator.vibrate && navigator.vibrate([200, 80, 200]);
     mostrar('bad', `<div class="t1">⚠ QR NO VÁLIDO</div><div class="t3" style="margin-top:12px">${h(r.msg)}</div><div class="t4">No se registró la salida · Toque para continuar</div>`, 4500);
   }
+}
+
+async function buscarSalida(q) {
+  const ul = $('#bres', root); if (!ul) return;
+  if (q.length < 3) { ul.innerHTML = q ? '<li class="nota">Escriba al menos 3 letras…</li>' : ''; return; }
+  ul.innerHTML = '<li class="nota">Buscando…</li>';
+  try {
+    const rs = await rpc('buscar_participantes', { p_q: q, p_dia: getDia() });
+    // primero quienes entraron hoy
+    rs.sort((a, b) => (b.ingreso_dia ? 1 : 0) - (a.ingreso_dia ? 1 : 0));
+    ul.innerHTML = rs.length ? rs.map((x) => `<li>
+        <div class="who"><b>${h(x.nombre)}</b><span>${h(x.codigo)}${x.institucion ? ' · ' + h(x.institucion) : ''}</span>
+          <span class="${x.ingreso_dia ? 'si' : 'no'}">${x.ingreso_dia ? 'Entró ' + h(x.ingreso_dia.slice(0, 5)) : 'Sin entrada hoy'}</span></div>
+        ${x.salida_dia ? `<span class="hecho">Salió ${h(x.salida_dia.slice(0, 5))}</span>` : `<button class="btn" data-sal="${h(x.id)}">Marcar salida</button>`}
+      </li>`).join('') : '<li class="nota">No se encontró. Revise el nombre o búsquelo por correo.</li>';
+  } catch (e) { ul.innerHTML = `<li class="nota err">${h(e.message)}</li>`; }
+}
+
+async function marcarSalida(e) {
+  const b = e.target.closest('[data-sal]'); if (!b) return;
+  b.disabled = true; b.textContent = 'Registrando…';
+  try {
+    const r = await rpc('registrar_salida_id', { p_id: b.dataset.sal, p_dia: getDia() });
+    S.ocupado = true;
+    if (r.estado === 'ok') {
+      navigator.vibrate && navigator.vibrate(120);
+      const nota = r.entrada ? `Entró ${h(r.entrada.slice(0, 5))} · salió ${h(r.hora.slice(0, 5))}` : `Salida ${h(r.hora.slice(0, 5))} · <b>sin entrada registrada hoy</b>`;
+      mostrar('ok', `<div class="t1">✓ SALIDA REGISTRADA</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia} · ${nota}</div><div class="t4">Toque para continuar</div>`, 2500);
+      refrescar();
+    } else {
+      mostrar('ya', `<div class="t1">SALIDA YA REGISTRADA</div><div class="t2">${h(r.nombre)}</div><div class="t3">Día ${r.dia}: salió a las ${h(r.hora)}</div><div class="t4">Toque para continuar</div>`, 4000);
+    }
+    const q = $('#bq', root); if (q) { q.value = ''; q.blur(); }
+    $('#bres', root).innerHTML = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) { b.disabled = false; b.textContent = 'Marcar salida'; mostrar('bad', `<div class="t1">NO SE REGISTRÓ</div><div class="t3" style="margin-top:12px">${h(err.message)}</div><div class="t4">Toque y vuelva a intentar</div>`); }
 }
