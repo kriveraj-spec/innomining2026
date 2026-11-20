@@ -363,15 +363,18 @@ await paso('Salida (Día 2): modo Salida escanea el QR, registra la 2.ª toma y 
 await paso('Sorteo: filtra por % de asistencia, gira la ruleta, muestra al ganador y lo guarda', async () => {
   await adm.goto(S.url + '/#/sorteo');
   await adm.waitForSelector('#u-info b');
-  await adm.click('[data-ag="3"]');
-  await adm.waitForFunction(() => /\+ 3 «al agua»/.test(document.querySelector('#n-ruleta').textContent));
-  await adm.screenshot({ path: path.join(SHOTS, '17a-sorteo-agua.png') });
-  await adm.click('[data-ag="0"]');
   await adm.click('[data-u="33"]');
   await adm.waitForFunction(() => /en la ruleta/.test(document.querySelector('#u-info').textContent));
   const n = Number(await adm.$eval('#u-info b:nth-child(2)', (b) => b.textContent));
   assert.ok(n >= 2, 'hay participantes en la ruleta: ' + n);
   await adm.screenshot({ path: path.join(SHOTS, '17-sorteo.png') });
+  // Giro «al agua»: no cuenta, no se guarda nada
+  await adm.click('#girar');
+  await adm.waitForSelector('#gan:not([hidden]) #g-agua', { timeout: 15000 });
+  await adm.screenshot({ path: path.join(SHOTS, '17a-sorteo-opciones.png') });
+  await adm.click('#g-agua');
+  await adm.waitForSelector('#gan', { state: 'hidden' });
+  assert.equal((await q('select count(*)::int n from sorteo_ganadores'))[0].n, 0, 'al agua no guarda');
   await adm.click('#girar');
   await adm.waitForTimeout(3000);
   await adm.screenshot({ path: path.join(SHOTS, '17b-sorteo-girando.png') });
