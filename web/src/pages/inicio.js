@@ -1,5 +1,6 @@
 // Pantalla inicial: 1) elegir Día 1, 2 o 3; 2) elegir Organizador o Puerta.
 import { rpc, $, getDia, setDia, setModo } from '../lib/core.js';
+import logoUrl from '../assets/innomining-logo.png';
 
 let root, ctx, paso = 'dia';
 
@@ -10,7 +11,7 @@ export async function render(r, c) {
 
 function pintar() {
   const dia = getDia();
-  const cab = `<div class="brand" style="padding:0 0 26px;text-align:center;font-size:18px">INNOMINING <span>2026</span></div>`;
+  const cab = `<img class="logo-esquina fijo" src="${logoUrl}" alt="InnoMining"><div class="brand" style="padding:0 0 26px;text-align:center;font-size:18px">INNOMINING <span>2026</span></div>`;
   if (paso === 'dia') {
     root.innerHTML = `<div class="center" style="background:#fff"><div style="width:100%;max-width:760px">${cab}
       <h1 style="text-align:center;margin-bottom:8px">¿Qué día del congreso es?</h1>

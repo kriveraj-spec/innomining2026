@@ -1,8 +1,20 @@
 // Sorteo con ruleta: filtra por % de asistencia y gira entre los que califican.
 // Día 1 y 2: entrada + salida = día completo; solo una = medio día. Día 3: con entrada o salida = completo.
 import { rpc, $, h, toast, norm, descargar } from '../lib/core.js';
+import logoUrl from '../assets/innomining-logo.png';
 
-let root, datos = null, timer = 0, girando = false, rot = 0, lista = [], audio = null;
+let root, datos = null, timer = 0, girando = false, rot = 0, lista = [], rueda = [], audio = null;
+const AGUA = { agua: true, nombre: '💧 AL AGUA' };
+const nAgua = () => { const v = LS('im26-agua'); return v === null || v === '' ? 1 : Number(v); };
+// Reparte las casillas «al agua» de forma pareja entre los participantes.
+function conAgua(l, k) {
+  if (!k || !l.length) return k && !l.length ? [] : l.slice();
+  const out = [], paso = l.length / k;
+  let sig = Math.floor(paso / 2), j = 0;
+  l.forEach((p, i) => { out.push(p); while (j < k && i + 1 >= sig + 1) { out.push(AGUA); j++; sig = Math.floor(paso * j + paso / 2); } });
+  while (j++ < k) out.push(AGUA);
+  return out;
+}
 const PREMIOS = [
   { n: 'Beca 70% Michigan English Center (10 meses, transferible)', c: 4 },
   { n: '1 mes de prueba Michigan English Center', c: 1 },
@@ -13,12 +25,13 @@ const LS = (k, v) => { try { if (v === undefined) return localStorage.getItem(k)
 
 export async function render(r) {
   root = r;
-  const umbral = Number(LS('im26-umbral')) || 60;
+  const g = LS('im26-umbral'); const umbral = g === null || g === '' ? 60 : Number(g);
   root.innerHTML = `
     <div class="page-head"><div><h1>Sorteo</h1><p>Ruleta entre quienes cumplen el porcentaje de asistencia. Se actualiza sola con los QR que se escanean hoy.</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="csv">Exportar ganadores</button><button class="btn primary" id="full">Pantalla completa</button></div></div>
     <div class="sorteo">
       <div class="ruleta-box" id="box">
+        <img class="ruleta-logo" src="${logoUrl}" alt="InnoMining">
         <div class="ruleta-cab"><div class="rc-t">INNOMINING <span>2026</span> · Gran sorteo</div><div class="rc-p" id="premio-vivo"></div></div>
         <div class="ruleta-wrap">
           <div class="puntero"></div>
@@ -43,6 +56,11 @@ export async function render(r) {
           <p class="small muted" id="u-info" style="margin-top:10px"></p>
           <p class="small muted" style="margin-top:6px">Día 1 y 2: entrada + salida = día completo; solo una = medio día. Día 3: estar registrado (entrada o salida) = día completo. Cada día vale 1/3.</p>
         </div>
+        <div class="card">
+          <h3>Casillas «💧 Al agua» en la ruleta</h3>
+          <div class="cortes">${[0, 1, 2, 3, 5].map((n) => `<button class="btn sm" data-ag="${n}">${n}</button>`).join('')}</div>
+          <p class="small muted" style="margin-top:8px">Si la ruleta cae en «Al agua», nadie gana ese giro. La casilla se queda para los siguientes giros.</p>
+        </div>
         <div class="card"><h3>Ganadores</h3><ul class="gan-lista" id="ganadores"></ul></div>
       </div>
     </div>
@@ -56,6 +74,7 @@ export async function render(r) {
   $('#premio', root).addEventListener('input', (e) => { LS('im26-premio', e.target.value); pintarPremios(); });
   $('#premios', root).addEventListener('click', (e) => { const b = e.target.closest('[data-p]'); if (!b) return; $('#premio', root).value = b.dataset.p; LS('im26-premio', b.dataset.p); pintarPremios(); });
   $('#q', root).addEventListener('input', pintarTabla);
+  root.querySelectorAll('[data-ag]').forEach((b) => (b.onclick = () => { if (girando) return; LS('im26-agua', b.dataset.ag); pintar(); }));
   $('#girar', root).onclick = girar;
   $('#full', root).onclick = () => { const b = $('#box', root); (document.fullscreenElement ? document.exitFullscreen() : b.requestFullscreen && b.requestFullscreen()).catch?.(() => {}); };
   $('#csv', root).onclick = exportar;
@@ -80,11 +99,15 @@ function pintar() {
   if (!datos || !root.isConnected) return;
   const u = umbral();
   $('#u-txt', root).textContent = u + '%';
+  root.querySelectorAll('[data-u]').forEach((b) => b.classList.toggle('on', Number(b.dataset.u) === u));
   const califican = datos.participantes.filter((p) => p.pct >= u - 0.05);
   lista = califican.filter((p) => !p.sorteo);
   const yaGan = califican.filter((p) => p.sorteo === 'ganador').length;
   $('#u-info', root).innerHTML = `<b>${califican.length}</b> califican · <b>${lista.length}</b> en la ruleta${yaGan ? ` · ${yaGan} ya ganaron` : ''} · de ${datos.participantes.length} con alguna asistencia`;
-  $('#n-ruleta', root).textContent = `${lista.length} participantes en la ruleta · asistencia mínima ${u}%`;
+  const ag = nAgua();
+  rueda = conAgua(lista, ag);
+  $('#n-ruleta', root).textContent = `${lista.length} participantes en la ruleta${ag ? ` + ${ag} «al agua»` : ''} · asistencia mínima ${u}%`;
+  root.querySelectorAll('[data-ag]').forEach((b) => b.classList.toggle('on', Number(b.dataset.ag) === ag));
   $('#act', root).textContent = `· actualizado ${datos.actualizado.slice(0, 5)}`;
   $('#girar', root).disabled = !lista.length;
   pintarPremios(); pintarGanadores(); pintarTabla(); dibujar();
@@ -121,7 +144,7 @@ function pintarTabla() {
 // ------------------------------------------------------------------ Ruleta
 function dibujar() {
   const cv = $('#cv', root); if (!cv) return;
-  const g = cv.getContext('2d'), W = cv.width, R = W / 2 - 14, n = lista.length;
+  const g = cv.getContext('2d'), W = cv.width, R = W / 2 - 14, n = rueda.length;
   g.clearRect(0, 0, W, W);
   g.save(); g.translate(W / 2, W / 2);
   // aro exterior
@@ -137,14 +160,14 @@ function dibujar() {
   const fs = Math.max(11, Math.min(34, (R * a) * 0.62));
   for (let i = 0; i < n; i++) {
     g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, R, i * a, (i + 1) * a); g.closePath();
-    g.fillStyle = COLORES[i % COLORES.length];
+    g.fillStyle = rueda[i].agua ? '#38bdf8' : COLORES[i % COLORES.length];
     if (n > 1 && i === n - 1 && (n - 1) % COLORES.length === 0) g.fillStyle = COLORES[3];
     g.fill();
     if (n <= 90) { g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1.5; g.stroke(); }
     if (conTexto) {
       g.save(); g.rotate(i * a + a / 2); g.textAlign = 'right'; g.textBaseline = 'middle';
-      g.fillStyle = '#fff'; g.font = `600 ${fs}px Inter, system-ui, sans-serif`;
-      const nom = lista[i].nombre.split(' ').slice(0, 2).join(' ');
+      g.fillStyle = rueda[i].agua ? '#0c2a4a' : '#fff'; g.font = `${rueda[i].agua ? 800 : 600} ${fs}px Inter, system-ui, sans-serif`;
+      const nom = rueda[i].agua ? 'AL AGUA 💧' : rueda[i].nombre.split(' ').slice(0, 2).join(' ');
       g.fillText(nom.length > 22 ? nom.slice(0, 21) + '…' : nom, R - 18, 0);
       g.restore();
     }
@@ -156,7 +179,7 @@ function dibujar() {
 
 // Índice bajo el puntero (arriba). El ángulo 0 del canvas está a la derecha; el puntero está en -90°.
 function indiceEn(r) {
-  const n = lista.length, a = (Math.PI * 2) / n;
+  const n = rueda.length, a = (Math.PI * 2) / n;
   let t = (-Math.PI / 2 - r) % (Math.PI * 2); if (t < 0) t += Math.PI * 2;
   return Math.floor(t / a) % n;
 }
@@ -180,14 +203,25 @@ function fanfarria() {
   } catch (_) { /* sin audio */ }
 }
 
+function agua() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), v = audio.createGain(), t = audio.currentTime;
+    o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(180, t + 0.6);
+    v.gain.setValueAtTime(0.0001, t); v.gain.exponentialRampToValueAtTime(0.25, t + 0.03); v.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(v); v.connect(audio.destination); o.start(t); o.stop(t + 0.75);
+  } catch (_) { /* sin audio */ }
+}
+
 function azar(n) { const x = new Uint32Array(1); crypto.getRandomValues(x); return x[0] % n; }
 
 function girar() {
   if (girando || !lista.length) return;
+  if (!rueda.length) rueda = conAgua(lista, nAgua());
   if (!premioActual()) { toast('Elige o escribe el premio que se sortea.', true); return; }
   girando = true; $('#girar', root).disabled = true;
   if (audio && audio.state === 'suspended') audio.resume();
-  const fijos = lista.slice(); // la ruleta no cambia mientras gira
+  const fijos = rueda.slice(); // la ruleta no cambia mientras gira
   const n = fijos.length, a = (Math.PI * 2) / n;
   const win = azar(n);
   const dentro = (0.15 + Math.random() * 0.7) * a; // no caer justo en el borde
@@ -211,8 +245,21 @@ function girar() {
 }
 
 function mostrarGanador(p) {
-  fanfarria(); confeti();
   const el = $('#gan', root);
+  if (p.agua) {
+    agua();
+    el.innerHTML = `<div class="g-in">
+      <div class="g-k" style="color:#7dd3fc">💧 ¡AL AGUA!</div>
+      <div class="g-n">Nadie gana esta vez</div>
+      <div class="g-d">${h(premioActual())} sigue en juego</div>
+      <div class="g-b"><button class="btn big ok" id="g-otra">Girar de nuevo</button><button class="btn big" id="g-x2">Cerrar</button></div></div>`;
+    el.hidden = false;
+    const cerrar = () => { el.hidden = true; $('#girar', root).disabled = false; $('#ticker', root).innerHTML = '&nbsp;'; };
+    $('#g-otra', el).onclick = () => { cerrar(); girar(); };
+    $('#g-x2', el).onclick = cerrar;
+    return;
+  }
+  fanfarria(); confeti();
   el.innerHTML = `<div class="g-in">
     <div class="g-k">🎉 ¡GANADOR!</div>
     <div class="g-p">${h(premioActual())}</div>

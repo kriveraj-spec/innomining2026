@@ -13,6 +13,7 @@ import * as participantes from './pages/participantes.js';
 import * as correos from './pages/correos.js';
 import * as configuracion from './pages/configuracion.js';
 import * as sorteo from './pages/sorteo.js';
+import logoUrl from './assets/innomining-logo.png';
 
 const I = {
   inicio: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -100,8 +101,9 @@ function shell(ruta) {
       ${admin ? `<div class="label">Administración</div>${item('resumen')}${item('participantes')}${item('asistencia')}${item('sorteo')}${item('correos')}${item('configuracion')}` : ''}
       <div class="who"><b>${h(ctx.perfil.nombre)}</b><span class="small muted">Datos sincronizados entre todos los dispositivos</span></div>
     </aside>
-    <div>
-      <div class="topbar"><button class="btn ghost sm" id="menu" aria-label="Menú">${icono('menu').replace('<svg', '<svg width="20" height="20"')}</button><b>${RUTAS[ruta].titulo}</b><span class="chip acc">Día ${getDia()}</span></div>
+    <div class="contenido">
+      <div class="topbar"><button class="btn ghost sm" id="menu" aria-label="Menú">${icono('menu').replace('<svg', '<svg width="20" height="20"')}</button><b>${RUTAS[ruta].titulo}</b><span style="display:flex;align-items:center;gap:8px"><span class="chip acc">Día ${getDia()}</span><img class="logo-top" src="${logoUrl}" alt="InnoMining"></span></div>
+      <img class="logo-esquina" src="${logoUrl}" alt="InnoMining">
       <main class="page" id="main"></main>
     </div>
   </div>`;
