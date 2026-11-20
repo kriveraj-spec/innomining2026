@@ -12,6 +12,7 @@ import * as escaner from './pages/escaner.js';
 import * as participantes from './pages/participantes.js';
 import * as correos from './pages/correos.js';
 import * as configuracion from './pages/configuracion.js';
+import * as sorteo from './pages/sorteo.js';
 
 const I = {
   inicio: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -22,6 +23,7 @@ const I = {
   participantes: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   correos: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
   configuracion: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  sorteo: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.4 6.4M12 12 5.6 18.4M12 12H3"/><path d="M10 1h4"/>',
   laptop: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>',
   celular: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>'
@@ -36,6 +38,7 @@ const RUTAS = {
   participantes: { mod: participantes, titulo: 'Inscritos', admin: true },
   asistencia: { mod: asistencia, titulo: 'Asistencia', admin: true },
   correos: { mod: correos, titulo: 'Correos', admin: true },
+  sorteo: { mod: sorteo, titulo: 'Sorteo', admin: true },
   configuracion: { mod: configuracion, titulo: 'Configuración', admin: true }
 };
 
@@ -94,7 +97,7 @@ function shell(ruta) {
       <a class="nav" href="#/inicio" style="color:var(--muted);font-size:14px">← Cambiar día o modo</a>
       <div class="label">Ingreso al evento</div>
       ${item('registro')}${item('escaner')}
-      ${admin ? `<div class="label">Administración</div>${item('resumen')}${item('participantes')}${item('asistencia')}${item('correos')}${item('configuracion')}` : ''}
+      ${admin ? `<div class="label">Administración</div>${item('resumen')}${item('participantes')}${item('asistencia')}${item('sorteo')}${item('correos')}${item('configuracion')}` : ''}
       <div class="who"><b>${h(ctx.perfil.nombre)}</b><span class="small muted">Datos sincronizados entre todos los dispositivos</span></div>
     </aside>
     <div>

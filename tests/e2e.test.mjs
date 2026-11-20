@@ -360,6 +360,27 @@ await paso('Salida (Día 2): modo Salida escanea el QR, registra la 2.ª toma y 
   await cel.waitForSelector('.scan-page:not(.salida)');
 });
 
+await paso('Sorteo: filtra por % de asistencia, gira la ruleta, muestra al ganador y lo guarda', async () => {
+  await adm.goto(S.url + '/#/sorteo');
+  await adm.waitForSelector('#u-info b');
+  await adm.click('[data-u="33"]');
+  await adm.waitForFunction(() => /en la ruleta/.test(document.querySelector('#u-info').textContent));
+  const n = Number(await adm.$eval('#u-info b:nth-child(2)', (b) => b.textContent));
+  assert.ok(n >= 2, 'hay participantes en la ruleta: ' + n);
+  await adm.screenshot({ path: path.join(SHOTS, '17-sorteo.png') });
+  await adm.click('#girar');
+  await adm.waitForTimeout(3000);
+  await adm.screenshot({ path: path.join(SHOTS, '17b-sorteo-girando.png') });
+  await adm.waitForSelector('#gan:not([hidden]) #g-si', { timeout: 15000 });
+  const nombre = await adm.textContent('#gan .g-n');
+  await adm.screenshot({ path: path.join(SHOTS, '17c-sorteo-ganador.png') });
+  await adm.click('#g-si');
+  await adm.waitForFunction((x) => document.querySelector('#ganadores').textContent.includes(x), nombre);
+  const g = await q("select g.estado, g.premio, p.nombre from sorteo_ganadores g join participantes p on p.id=g.participante_id");
+  assert.equal(g.length, 1); assert.equal(g[0].nombre, nombre); assert.match(g[0].premio, /Michigan/);
+  await adm.waitForFunction(() => /1 ya ganaron/.test(document.querySelector('#u-info').textContent));
+});
+
 await paso('Celular: vista móvil sin desplazamiento horizontal', async () => {
   const m = await nueva({ ...devices['iPhone 13'] }, 'movil');
   await entrar(m);

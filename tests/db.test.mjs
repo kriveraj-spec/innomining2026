@@ -516,6 +516,35 @@ await prueba('Salida: 20 lecturas simultáneas → 1 sola; manual por id; export
   await rechaza(S.llamar(null, 'registrar_salida_qr', { p_qr: t, p_dia: 1 }));
 });
 
+await prueba('Sorteo: % de asistencia (D1/D2 entrada+salida = 1, una sola = ½; D3 cualquiera = 1) y ganadores', async () => {
+  // Ana: D1 entrada (sin salida) = ½ ... + D2 entrada + salida = 1 → 50 %
+  const ana = (await q("select id from participantes where email='ana.perez@example.com'"))[0].id;
+  await S.llamar(laptop, 'registrar_ingreso_id', { p_id: ana, p_dia: 2 });
+  await S.llamar(laptop, 'registrar_salida_id', { p_id: ana, p_dia: 2 });
+  let d = await A('sorteo_datos');
+  let pa = d.participantes.find((p) => p.id === ana);
+  assert.equal(pa.d1, 1); // Ana tiene entrada y salida el día 1 (pruebas anteriores)
+  assert.equal(pa.d2, 1);
+  assert.equal(Math.round(pa.pct), 67);
+  // Día 3: solo entrada ya cuenta completo
+  await S.llamar(celular, 'registrar_ingreso_qr', { p_qr: await tok('ana.perez@example.com'), p_dia: 3 });
+  d = await A('sorteo_datos');
+  pa = d.participantes.find((p) => p.id === ana);
+  assert.deepEqual([pa.d3, pa.pct], [1, 100]);
+  // medio día: solo salida el día 2 (María José)
+  const mj = d.participantes.find((p) => p.nombre === 'María José Torres Ríos');
+  assert.equal(mj.d2, 0.5);
+  // ganador y ausente
+  await A('sorteo_guardar', { p_participante: ana, p_premio: 'Beca', p_estado: 'ganador' });
+  await rechaza(A('sorteo_guardar', { p_participante: ana, p_premio: 'Otra', p_estado: 'ganador' }), /ya ganó/);
+  d = await A('sorteo_datos');
+  assert.equal(d.participantes.find((p) => p.id === ana).sorteo, 'ganador');
+  assert.equal(d.ganadores.length, 1);
+  await A('sorteo_quitar', { p_id: d.ganadores[0].id });
+  assert.equal((await A('sorteo_datos')).ganadores.length, 0);
+  await rechaza(S.llamar(celular, 'sorteo_datos', {}));
+});
+
 await prueba('Eliminar: bloqueado si tiene asistencias', async () => {
   const ana = (await q("select id from participantes where email='ana.perez@example.com'"))[0].id;
   await rechaza(A('eliminar_participante', { p_id: ana }), /asistencias/);
